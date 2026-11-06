@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-${{ github.ref }}
@@ -56,11 +56,24 @@ jobs:
           "$AAPT" dump xmltree --file AndroidManifest.xml "$APK" | grep -A2 "gms.ads.APPLICATION_ID" | grep -q "3940256099942544" || { echo "::error::debug APK carries a non-TEST AdMob App ID"; exit 1; }
           if [ -n "$ADMOB_REWARDED_ID" ] && unzip -p "$APK" assets/public/js/config.js | grep -qF "$ADMOB_REWARDED_ID"; then echo "::error::debug APK carries the real rewarded unit"; exit 1; fi
           if unzip -l "$APK" | grep -q " lib/armeabi-v7a/" && ! unzip -l "$APK" | grep -q " lib/arm64-v8a/"; then echo "::error::32-bit only native libs"; exit 1; fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: BrainrotAuraRush-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
+      - name: Publish APK to rolling <branch>-latest prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')-latest"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/BrainrotAuraRush-debug.apk"
+          notes="Latest build of $BRANCH from $SHA (run $GITHUB_RUN_ID)."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$notes" --prerelease
+          else
+            gh release create "$TAG" --target "$SHA" --title "$BRANCH (latest build)" --notes "$notes" --prerelease
+          fi
+          gh release upload "$TAG" "$RUNNER_TEMP/BrainrotAuraRush-debug.apk" --clobber
 
   release-aab:
     if: github.event_name == 'workflow_dispatch'
@@ -112,4 +125,4 @@ jobs:
         with:
           name: BrainrotAuraRush-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
+          retention-days: 2
