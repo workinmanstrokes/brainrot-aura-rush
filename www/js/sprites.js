@@ -359,7 +359,56 @@
       box(c, -18, -118, 36, 16, 5, '#475569', 1.6); blob(c, 0, -126, 8, 6, '#facc15', 1.2);
       shine(c, -28, -100, 14, 5, 0.55);
     } },
+
+    // Boss 6: Yeti Scudiero — Michael's provided 3D yeti knight (image frames in assets/yeti/).
+    // Atlas only keeps a soft placeholder; runtime drawing uses Sprites.Yeti.draw with the real art.
+    yeti: { name: 'Yeti Scudiero', role: 'Boss', w: 120, h: 140, frames: 2, draw(c, f) {
+      if (YETI.drawTo(c, 'attack', 0, 0, 0, 120 / 384)) return;
+      // images not ready yet (unit tests / first paint): soft silhouette so atlas build never crashes
+      blob(c, 0, -70, 36, 55, '#e8eef7', 1.5); blob(c, 0, -118, 22, 22, '#f8fafc', 1.2);
+    } },
   };
+
+
+  // ---------- Yeti Scudiero (Michael's sprite strips) ----------
+  // 10-frame strips: attack (flash + shove), overhead smash, ice/lightning cast, defeat.
+  // No walk/spin strips were provided — idle is always frame 0 of a strip.
+  const YETI = (() => {
+    const anims = { attack: [], overhead: [], cast: [], defeat: [] };
+    let ready = 0, total = 40; // 4 strips × 10 frames (Michael's art under assets/yeti/)
+    if (typeof Image !== 'undefined') {
+      for (const [anim, n] of [['attack', 10], ['overhead', 10], ['cast', 10], ['defeat', 10]]) {
+        for (let i = 0; i < n; i++) {
+          const im = new Image();
+          im.onload = () => { ready++; atlas = null; };
+          im.src = `assets/yeti/${anim}_${i}.png`;
+          anims[anim][i] = im;
+        }
+      }
+    } else {
+      for (const anim of Object.keys(anims)) for (let i = 0; i < 10; i++) anims[anim][i] = null;
+    }
+    function frame(anim, i) {
+      const list = anims[anim] || anims.attack;
+      const im = list[Math.max(0, Math.min(list.length - 1, i | 0))];
+      return im && im.complete && im.naturalWidth ? im : null;
+    }
+    /** Draw into a CAST-style local context (origin at feet, y up negative). */
+    function drawTo(c, anim, i, x, y, worldW) {
+      const im = frame(anim, i); if (!im) return false;
+      const k = worldW / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      c.drawImage(im, x - dw / 2, y - dh, dw, dh);
+      return true;
+    }
+    /** Draw in game render coords: feet at (x, footY) in the already y-flipped sprite pass (same as Sprites.draw). */
+    function draw(ctx, anim, i, x, footY, scale = 1) {
+      const im = frame(anim, i); if (!im) return false;
+      const w = 120 * scale, k = w / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      ctx.drawImage(im, x - dw / 2, footY - dh, dw, dh);
+      return true;
+    }
+    return { anims, frame, draw, drawTo, ready: () => ready >= total && total > 0, count: () => total };
+  })();
 
   // ---------- Atlas ----------
   const PX = 3; // atlas pixels per world unit (sprites are drawn at <= ~2.6 px/unit on phones)
@@ -368,7 +417,7 @@
     const doc = root.document; if (!doc) return;
     const pad = 4; let x = 0, y = 0, rowH = 0; const maxW = 1800, place = [];
     for (const key in CAST) {
-      const s = CAST[key], px = (key === 'boss' || key === 'sweeper' || key === 'espresso' || key === 'flamenco' || key === 'squaloBoss') ? 2 : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
+      const s = CAST[key], px = (key === 'boss' || key === 'sweeper' || key === 'espresso' || key === 'flamenco' || key === 'squaloBoss' || key === 'yeti') ? 2 : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
       const list = [...Array(s.frames).keys(), 'hit'];
       for (const fr of list) { if (x + fw > maxW) { x = 0; y += rowH; rowH = 0; } place.push({ key, fr, x, y, fw, fh, px }); x += fw; rowH = Math.max(rowH, fh); }
     }
@@ -391,5 +440,5 @@
     const s = CAST[key], w = (s.w + f.pad * 2) * scale, h = (s.h + f.pad * 2) * scale;
     ctx.drawImage(atlas, f.sx, f.sy, f.sw, f.sh, x - w / 2, y - h + f.pad * scale, w, h);
   }
-  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas };
+  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas, Yeti: YETI };
 })(typeof window !== 'undefined' ? window : globalThis);

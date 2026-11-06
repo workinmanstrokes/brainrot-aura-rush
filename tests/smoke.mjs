@@ -72,8 +72,8 @@ const sw = await p.evaluate(() => ({ kind: boss.kind, name: $('bossName').textCo
 if (sw.kind === 'sweeper' && /SWEEPING OLD MAN/.test(sw.name) && sw.dust > 0 && sw.r > 14) pass(`sweeper boss throws dust balls (${sw.dust}, r ${sw.r.toFixed(1)})`); else fail('sweeper ' + JSON.stringify(sw));
 await p.evaluate(() => { squad.count = 14; troopStage = 2; evolveFlash = 0; entities.texts.length = 0; }); await p.waitForTimeout(700);
 await p.screenshot({ path: process.env.BOSS_SHOT || '/tmp/br-sweeper.png' });
-const rot = await p.evaluate(() => [1,2,3,4,5].map(lv => { level = lv; return bossKind(); }));
-if (rot.join(',') === 'grump,sweeper,espresso,flamenco,squalo') pass('boss rotation ' + rot.join(' -> ')); else fail('rotation ' + rot);
+const rot = await p.evaluate(() => [1,2,3,4,5,6].map(lv => { level = lv; return bossKind(); }));
+if (rot.join(',') === 'grump,sweeper,espresso,flamenco,squalo,yeti') pass('boss rotation ' + rot.join(' -> ')); else fail('rotation ' + rot);
 await p.evaluate(() => { level = 3; initLevel(); spawnBoss('espresso'); boss.timer = 0; boss.attacks = 2; }); await p.waitForTimeout(1400);
 const es = await p.evaluate(() => ({ kind: boss.kind, name: $('bossName').textContent, dust: entities.dust.length, fl: entities.dust[0] && entities.dust[0].flavor }));
 if (es.kind === 'espresso' && /ESPRESSORILLA/.test(es.name) && es.dust > 0 && es.fl === 'espresso') pass(`espresso cups (${es.dust})`); else fail('espresso ' + JSON.stringify(es));
@@ -86,6 +86,12 @@ await p.evaluate(() => { level = 5; initLevel(); spawnBoss('squalo'); boss.timer
 const sqb = await p.evaluate(() => ({ kind: boss.kind, name: $('bossName').textContent, dust: entities.dust.length, fl: entities.dust[0] && entities.dust[0].flavor }));
 if (sqb.kind === 'squalo' && /SQUALO/.test(sqb.name) && sqb.dust > 0 && sqb.fl === 'shell') pass(`squalo shells (${sqb.dust})`); else fail('squalo ' + JSON.stringify(sqb));
 await p.screenshot({ path: '/tmp/br-squalo.png' });
+await p.evaluate(() => { level = 6; initLevel(); spawnBoss('yeti'); boss.timer = 0; boss.attacks = 0; }); await p.waitForTimeout(1600);
+const yt = await p.evaluate(() => ({ kind: boss.kind, name: $('bossName').textContent, st: boss.state, anim: boss.anim, fr: boss.frame }));
+const okY = yt.kind === 'yeti' && /YETI SCUDIERO/.test(yt.name) && ['CAST','OVERHEAD','SPECIAL','RECOVER','IDLE'].includes(yt.st);
+if (okY) pass(`yeti scudiero (${yt.st}/${yt.anim} f${yt.fr})`); else fail('yeti ' + JSON.stringify(yt));
+await p.evaluate(() => { boss.state = 'OVERHEAD'; boss.anim = 'overhead'; boss.frame = 5; boss.animT = 0.5; boss.timer = 1; }); await p.waitForTimeout(200);
+await p.screenshot({ path: process.env.YETI_SHOT || '/workspace/artifacts/brainrot-bosses/br-yeti.png' });
 if (await p.evaluate(() => { level = 1; initLevel(); spawnBoss(); return boss.kind; }) === 'grump') pass('zone 1 is the Grump King'); else fail('zone1 grump');
 // boss gate: optional "double squad" offer, once per zone
 await p.evaluate(() => { localStorage.clear(); save.ads = { day: '', count: 0, chest: 0 }; quitToTitle(); });

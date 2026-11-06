@@ -1,7 +1,7 @@
 # Brainrot: Tactical Aura Rush
 
 Portrait canvas runner for Android, built with Capacitor 8. Steer your squad through gates, blast
-the swarm, evolve your hero and take down zone bosses (Grump King, Sweeping Old Man, Espressorilla, Flamenco Rotorina, Squalo Supremo — cycles each zone). This repo started as the original Aether
+the swarm, evolve your hero and take down zone bosses (Grump King, Sweeping Old Man, Espressorilla, Flamenco Rotorina, Squalo Supremo, Yeti Scudiero — cycles each zone). This repo started as the original Aether
 Surge app and was split at commit `9fd7c02`; Aether Surge now lives in
 [workinmanstrokes/aether-surge](https://github.com/workinmanstrokes/aether-surge). The two are
 separate apps with separate Play listings.
