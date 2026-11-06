@@ -341,9 +341,21 @@
     const entities = { bullets: [], gates: [], enemies: [], particles: [], texts: [], dust: [] };
     let boss = null;
     let dustBlind = 0, dustSlow = 0; // Dust Bawl hit: brief haze over the screen + sluggish steering
-    // Boss rotation: odd zones the Grump King (laser), even zones the Sweeping Old Man (Dust Bawl). ?boss=sweeper|grump forces one.
+    // Boss roster (cycles by zone). Restored cut cast: Espressorilla, Flamenco Rotorina, Squalo Supremo + the two live bosses.
+    // ?boss=grump|sweeper|espresso|flamenco|squalo forces one for testing.
+    const BOSS_ROSTER = [
+      { kind: 'grump',     sprite: 'boss',       name: 'TESTONE BAFFOLINI',      shout: 'GRUMP KING!',          hpMul: 1 },
+      { kind: 'sweeper',   sprite: 'sweeper',    name: 'THE SWEEPING OLD MAN',   shout: 'DUST BAWL INCOMING!',  hpMul: 0.9 },
+      { kind: 'espresso',  sprite: 'espresso',   name: 'ESPRESSORILLA',          shout: 'STEAM PRESSURE!',      hpMul: 1.05 },
+      { kind: 'flamenco',  sprite: 'flamenco',   name: 'FLAMENCO ROTORINA',      shout: 'ROTOR RUSH!',          hpMul: 0.95 },
+      { kind: 'squalo',    sprite: 'squaloBoss', name: 'SQUALO SUPREMO',         shout: 'CANNON BARRAGE!',      hpMul: 1.1 },
+    ];
     const BOSS_FORCE = (new URLSearchParams(location.search).get('boss') || '').toLowerCase();
-    const bossKind = () => BOSS_FORCE === 'sweeper' || BOSS_FORCE === 'grump' ? BOSS_FORCE : (level % 2 === 0 ? 'sweeper' : 'grump');
+    const bossMeta = (kind) => BOSS_ROSTER.find(b => b.kind === kind) || BOSS_ROSTER[0];
+    const bossKind = () => {
+      if (BOSS_FORCE && BOSS_ROSTER.some(b => b.kind === BOSS_FORCE)) return BOSS_FORCE;
+      return BOSS_ROSTER[(Math.max(1, level) - 1) % BOSS_ROSTER.length].kind;
+    };
 
     // Difficulty knobs per zone
     // Hits cost a flat amount early on and a share of the squad later, so big squads still feel pressure.
@@ -521,12 +533,13 @@
 
     function spawnBoss(kind) {
       state = 'BOSS'; kind = kind || bossKind();
-      const hp = Math.round(bossHp() * (kind === 'sweeper' ? 0.9 : 1)); // dust balls can be shot down, so he's a bit tankier per threat
-      boss = { kind, x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false, near: 0, attacks: 0 };
+      const meta = bossMeta(kind);
+      const hp = Math.round(bossHp() * meta.hpMul);
+      boss = { kind, sprite: meta.sprite, x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false, near: 0, attacks: 0, dir: 1, swept: false };
       entities.dust = entities.dust || []; entities.dust.length = 0; dustBlind = 0; dustSlow = 0;
-      $('bossName').textContent = kind === 'sweeper' ? 'THE SWEEPING OLD MAN' : 'TESTONE BAFFOLINI';
+      $('bossName').textContent = meta.name;
       $('bossUI').style.display = 'flex'; $('bossHpBar').style.width = '100%';
-      addFloatText(0, trackProgress + 300, kind === 'sweeper' ? 'DUST BAWL INCOMING!' : 'GRUMP KING!', '#facc15');
+      addFloatText(0, trackProgress + 300, meta.shout, '#facc15');
       baseSpeed = 80;
     }
 
@@ -632,7 +645,7 @@
           const n = Math.min(4, 1 + Math.floor(level / 2)), spread = 90;
           for (let i = 0; i < n; i++) {
             const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * spread));
-            const T = 2.0; entities.dust.push({ x: b.x, y: b.y - 40, vx: (tx - b.x) / T, vy: -(450 + 120) / T, r: 14, hp: 60 * enemyHpMul(), spin: 0 });
+            const T = 2.0; entities.dust.push({ x: b.x, y: b.y - 40, vx: (tx - b.x) / T, vy: -(450 + 120) / T, r: 14, hp: 60 * enemyHpMul(), spin: 0, flavor: 'dust' });
           }
           b.state = 'RECOVER'; b.timer = 0.5; playSound('laser'); triggerShake(8);
         }
@@ -663,6 +676,195 @@
       return false;
     }
 
+    // Grump King: telegraphed laser lanes (share of squad while standing in them).
+    function updateGrump(dt) {
+      const b = boss; b.y = trackProgress + 450; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (0 - b.x) * 2 * dt;
+        if (b.timer <= 0) {
+          b.state = 'TELEGRAPH'; b.timer = Math.max(0.9, 1.5 - 0.1 * (level - 1));
+          b.targetX = squad.x; b.lanes = [squad.x];
+          if (level >= 3) {
+            const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (130 + Math.random() * 60);
+            if (Math.abs(x2) <= 170) b.lanes.push(x2);
+          }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        if (b.timer <= 0) {
+          b.state = 'STRIKE'; b.timer = level >= 5 ? 0.95 : 0.8; b.shielded = false;
+          playSound('laser'); triggerShake(15); buzz('heavy');
+        }
+      } else if (b.state === 'STRIKE') {
+        if (b.lanes.some(lx => Math.abs(squad.x - lx) < 60)) {
+          if (!b.shielded && shieldCharges > 0) {
+            b.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
+          }
+          if (!b.shielded) {
+            squad.count -= Math.max(10, squad.count * 0.9) * dt; damageFlash = 0.12;
+            if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+            if (squad.count < 1) { gameOver(); return true; }
+          }
+        }
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.8, 2.0 - 0.25 * (level - 1)); }
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Espressorilla: steam jets (lane scald) + lobbed espresso cups (shootable, like dust).
+    function updateEspresso(dt) {
+      const b = boss; b.y = trackProgress + 460; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (squad.x * 0.35 - b.x) * 1.6 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 3 === 0) {
+            b.state = 'WINDUP'; b.timer = Math.max(0.65, 1.05 - 0.06 * (level - 1)); b.targetX = squad.x;
+          } else {
+            b.state = 'TELEGRAPH'; b.timer = Math.max(0.85, 1.35 - 0.08 * (level - 1));
+            b.lanes = [squad.x];
+            if (level >= 2) {
+              const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (110 + Math.random() * 50);
+              if (Math.abs(x2) <= 170) b.lanes.push(x2);
+            }
+            if (level >= 5) b.lanes.push(0);
+          }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        if (b.timer <= 0) { b.state = 'STRIKE'; b.timer = 0.85; b.shielded = false; playSound('laser'); triggerShake(12); buzz('heavy'); }
+      } else if (b.state === 'STRIKE') {
+        if (b.lanes.some(lx => Math.abs(squad.x - lx) < 55)) {
+          if (!b.shielded && shieldCharges > 0) {
+            b.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
+          }
+          if (!b.shielded) {
+            squad.count -= Math.max(8, squad.count * 0.75) * dt; damageFlash = 0.1;
+            if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+            if (squad.count < 1) { gameOver(); return true; }
+          }
+        }
+        if (b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.45; }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          const n = Math.min(5, 2 + Math.floor(level / 2));
+          for (let i = 0; i < n; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * 70));
+            const T = 1.7;
+            entities.dust.push({ x: b.x + (i - (n - 1) / 2) * 18, y: b.y - 50, vx: (tx - b.x) / T, vy: -(420) / T, r: 11, hp: 50 * enemyHpMul(), spin: 0, flavor: 'espresso' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.4; playSound('laser'); triggerShake(8);
+        }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.65, 1.55 - 0.18 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'SCALDED!', tint: '#78350f', blind: false, dmgShare: 0.09 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Flamenco Rotorina: rotor telegraph, then a diving blade sweep across the road.
+    function updateFlamenco(dt) {
+      const b = boss; b.timer -= dt; if (b.hitTime > 0) b.hitTime -= dt;
+      b.near += ((b.state === 'LUNGE' || b.state === 'SWEEP') ? 1 : -1) * dt * 2.4; b.near = Math.max(0, Math.min(1, b.near));
+      b.y = trackProgress + 480 - b.near * 300;
+      if (b.state === 'IDLE') {
+        b.x += (Math.sin(zoneTime * 1.4) * 90 - b.x) * 2 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 2 === 0) { b.state = 'TELEGRAPH'; b.timer = Math.max(0.7, 1.1 - 0.06 * (level - 1)); b.targetX = squad.x; }
+          else { b.state = 'WINDUP'; b.timer = 0.85; b.targetX = squad.x; }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        b.x += (b.targetX - b.x) * 2.5 * dt;
+        if (b.timer <= 0) { b.state = 'LUNGE'; b.timer = 0.55; playSound('laser'); triggerShake(10); }
+      } else if (b.state === 'LUNGE') {
+        b.x += (b.targetX - b.x) * 4 * dt;
+        if (b.timer <= 0) { b.state = 'SWEEP'; b.timer = 0.5; b.shielded = false; b.swept = false; buzz('heavy'); triggerShake(16); }
+      } else if (b.state === 'SWEEP') {
+        // wide rotor blade disc
+        if (!b.swept && Math.abs(squad.x - b.x) < 145) {
+          b.swept = true; spawnExplosion(squad.x, trackProgress + 20, '#fda4af', 28);
+          if (loseTroops(Math.max(7, Math.round(squad.count * (0.28 + 0.02 * level))), squad.x, trackProgress)) return true;
+        }
+        if (b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.55; }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          // feather gust orbs
+          for (let i = 0; i < 3; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - 1) * 85));
+            const T = 1.6;
+            entities.dust.push({ x: b.x, y: b.y - 30, vx: (tx - b.x) / T, vy: -(400) / T, r: 12, hp: 40 * enemyHpMul(), spin: 0, flavor: 'feather' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.35; playSound('laser');
+        }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.6, 1.5 - 0.16 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'GUSTED!', tint: '#f9a8d4', blind: false, dmgShare: 0.08 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Squalo Supremo: side-to-side charge + dual cannon shells (shootable).
+    function updateSqualo(dt) {
+      const b = boss; b.y = trackProgress + 440; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (b.dir * 70 - b.x) * 1.2 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 3 === 0) { b.state = 'LUNGE'; b.timer = 0.9; b.targetX = b.dir > 0 ? 150 : -150; b.shielded = false; b.swept = false; playSound('powerup'); }
+          else { b.state = 'WINDUP'; b.timer = Math.max(0.6, 0.95 - 0.05 * (level - 1)); b.targetX = squad.x; playSound('powerup'); }
+        }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          const n = Math.min(6, 2 + Math.floor(level / 2));
+          for (let i = 0; i < n; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * 55));
+            const T = 1.5 + Math.random() * 0.3;
+            entities.dust.push({ x: b.x + (i % 2 ? 14 : -14), y: b.y - 40, vx: (tx - b.x) / T, vy: -(460) / T, r: 10, hp: 70 * enemyHpMul(), spin: 0, flavor: 'shell' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.4; playSound('laser'); triggerShake(10);
+        }
+      } else if (b.state === 'LUNGE') {
+        b.x += (b.targetX - b.x) * 3.5 * dt;
+        // ramming anyone near the tread line
+        if (Math.abs(squad.x - b.x) < 95 && Math.abs((trackProgress + 30) - b.y) < 120) {
+          if (!b.swept) {
+            b.swept = true; spawnExplosion(squad.x, trackProgress + 10, '#0e7490', 24);
+            if (loseTroops(Math.max(8, Math.round(squad.count * (0.3 + 0.02 * level))), squad.x, trackProgress)) return true;
+          }
+        }
+        if (b.timer <= 0) { b.dir *= -1; b.state = 'RECOVER'; b.timer = 0.5; }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.55, 1.4 - 0.15 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'SHELL HIT!', tint: '#334155', blind: false, dmgShare: 0.11 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Shared rolling orb / projectile logic for espresso cups, feathers, shells (and sweeper still has its own).
+    function updateBossOrbs(dt, opt) {
+      for (let i = entities.dust.length - 1; i >= 0; i--) {
+        const d = entities.dust[i]; d.x += d.vx * dt; d.y += d.vy * dt + baseSpeed * dt * 0.2; d.r = Math.min(36, d.r + 12 * dt); d.spin += dt * 6;
+        let gone = d.hp <= 0 || d.y < trackProgress - 200;
+        if (!gone && Math.abs(d.x - squad.x) < d.r + 22 && Math.abs(d.y - trackProgress) < d.r) {
+          gone = true; spawnExplosion(d.x, d.y, opt.tint, 22, 1.2);
+          if (opt.blind && shieldCharges <= 0) { dustBlind = 1.2; dustSlow = 1.0; }
+          addFloatText(squad.x, trackProgress + 90, opt.label, opt.tint);
+          if (loseTroops(Math.max(3, Math.round(squad.count * (opt.dmgShare + 0.01 * level))), d.x, d.y)) return true;
+        }
+        if (gone) { if (d.hp <= 0) { spawnExplosion(d.x, d.y, opt.tint, 12); addAura(35); } entities.dust.splice(i, 1); }
+      }
+      return false;
+    }
+
     function update(dt, rawDt) {
       trackProgress += baseSpeed * dt; zoneTime += dt;
       if (keys.l !== keys.r && !dragging) { squad.targetX = Math.max(-150, Math.min(150, squad.targetX + (keys.r ? 1 : -1) * 340 * rawDt)); hideHint(); }
@@ -676,7 +878,14 @@
 
       if (dustSlow > 0) dustSlow -= dt; if (dustBlind > 0) dustBlind -= dt;
       squad.x += (squad.targetX - squad.x) * Math.min(1, (dustSlow > 0 ? 4 : 12) * dt);
-      if (state === 'BOSS' && boss.active && boss.kind === 'sweeper') { if (updateSweeper(dt)) return; }
+      if (state === 'BOSS' && boss.active) {
+        const ended = boss.kind === 'sweeper' ? updateSweeper(dt)
+          : boss.kind === 'espresso' ? updateEspresso(dt)
+          : boss.kind === 'flamenco' ? updateFlamenco(dt)
+          : boss.kind === 'squalo' ? updateSqualo(dt)
+          : updateGrump(dt);
+        if (ended) return;
+      }
       if (squad.visualCount < squad.count) {
         squad.visualCount += (squad.count - squad.visualCount) * 4 * dt;
         if (squad.count - squad.visualCount < 0.5) squad.visualCount = squad.count;
@@ -698,42 +907,6 @@
           const bx = Math.max(-ROAD_HALF, Math.min(ROAD_HALF, squad.drawX + (i - (numBullets - 1) / 2) * spreadMul));
           entities.bullets.push({ x: bx, y: trackProgress + 45, vy: 900, dmg, life: squad.fireRange / 900 });
         }
-      }
-
-      // Boss: telegraphed laser, faster in later zones; the laser takes a share of the squad
-      if (state === 'BOSS' && boss.active && boss.kind !== 'sweeper') {
-        boss.y = trackProgress + 450; boss.timer -= dt;
-        if (boss.hitTime > 0) boss.hitTime -= dt;
-        if (boss.state === 'IDLE') {
-          boss.x += (0 - boss.x) * 2 * dt;
-          if (boss.timer <= 0) {
-            boss.state = 'TELEGRAPH'; boss.timer = Math.max(0.9, 1.5 - 0.1 * (level - 1));
-            boss.targetX = squad.x; boss.lanes = [squad.x];
-            if (level >= 3) { // later zones: a second laser lane blocks one escape route
-              const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (130 + Math.random() * 60);
-              if (Math.abs(x2) <= 170) boss.lanes.push(x2);
-            }
-            playSound('powerup');
-          }
-        } else if (boss.state === 'TELEGRAPH') {
-          if (boss.timer <= 0) {
-            boss.state = 'STRIKE'; boss.timer = level >= 5 ? 0.95 : 0.8; boss.shielded = false;
-            playSound('laser'); triggerShake(15); buzz('heavy');
-          }
-        } else if (boss.state === 'STRIKE') {
-          if (boss.lanes.some(lx => Math.abs(squad.x - lx) < 60)) {
-            if (!boss.shielded && shieldCharges > 0) {
-              boss.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
-            }
-            if (!boss.shielded) {
-              squad.count -= Math.max(10, squad.count * 0.9) * dt; damageFlash = 0.12; // ~half the squad per full strike
-              if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
-              if (squad.count < 1) { gameOver(); return; }
-            }
-          }
-          if (boss.timer <= 0) { boss.state = 'IDLE'; boss.timer = Math.max(0.8, 2.0 - 0.25 * (level - 1)); }
-        }
-        $('bossHpBar').style.width = `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
       }
 
       // Enemies
@@ -889,26 +1062,42 @@
 
       ctx.save(); ctx.scale(1, -1); ctx.translate(0, -trackProgress);
 
-      if (state !== 'START' && boss && boss.active && boss.kind === 'sweeper') {
-        if (boss.state === 'WINDUP') { // dust lane telegraph toward where the squad was
-          ctx.strokeStyle = 'rgba(231,216,191,0.85)'; ctx.lineWidth = 4; ctx.setLineDash([12, 10]);
-          ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 120); ctx.stroke(); ctx.setLineDash([]);
-        }
-        if (boss.state === 'LUNGE' || boss.state === 'SWEEP') { // broom arc
+      if (state !== 'START' && boss && boss.active) {
+        if (boss.kind === 'sweeper') {
+          if (boss.state === 'WINDUP') {
+            ctx.strokeStyle = 'rgba(231,216,191,0.85)'; ctx.lineWidth = 4; ctx.setLineDash([12, 10]);
+            ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 120); ctx.stroke(); ctx.setLineDash([]);
+          }
+          if (boss.state === 'LUNGE' || boss.state === 'SWEEP') {
+            const sw = boss.state === 'SWEEP';
+            ctx.fillStyle = sw ? 'rgba(231,216,191,0.75)' : 'rgba(239,68,68,0.25)';
+            ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 125, 70, 0, 0, Math.PI * 2); ctx.fill();
+            if (!sw) { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); }
+          }
+        } else if ((boss.kind === 'grump' || boss.kind === 'espresso') && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') && boss.lanes) {
+          const strike = boss.state === 'STRIKE';
+          const y0 = trackProgress - 260, len = boss.y - trackProgress + 260;
+          const col = boss.kind === 'espresso' ? (strike ? 'rgba(120,53,15,0.85)' : 'rgba(180,83,9,0.3)') : (strike ? 'rgba(239,68,68,0.85)' : 'rgba(239,68,68,0.28)');
+          const hot = boss.kind === 'espresso' ? 'rgba(254,243,199,0.8)' : 'rgba(255,255,255,0.75)';
+          for (const lx of boss.lanes) {
+            ctx.fillStyle = col; ctx.fillRect(lx - 60, y0, 120, len);
+            if (strike) { ctx.fillStyle = hot; ctx.fillRect(lx - 14, y0, 28, len); }
+            else { ctx.strokeStyle = boss.kind === 'espresso' ? 'rgba(180,83,9,0.95)' : 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.strokeRect(lx - 60, y0, 120, len); ctx.setLineDash([]); }
+          }
+        } else if (boss.kind === 'flamenco' && (boss.state === 'TELEGRAPH' || boss.state === 'LUNGE' || boss.state === 'SWEEP')) {
           const sw = boss.state === 'SWEEP';
-          ctx.fillStyle = sw ? 'rgba(231,216,191,0.75)' : 'rgba(239,68,68,0.25)';
-          ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 125, 70, 0, 0, Math.PI * 2); ctx.fill();
-          if (!sw) { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); }
-        }
-      }
-      if (state !== 'START' && boss && boss.active && boss.kind !== 'sweeper' && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE')) {
-        const strike = boss.state === 'STRIKE';
-        const y0 = trackProgress - 260, len = boss.y - trackProgress + 260;
-        for (const lx of boss.lanes) {
-          ctx.fillStyle = strike ? 'rgba(239, 68, 68, 0.85)' : 'rgba(239, 68, 68, 0.28)';
-          ctx.fillRect(lx - 60, y0, 120, len);
-          if (strike) { ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillRect(lx - 14, y0, 28, len); }
-          else { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.strokeRect(lx - 60, y0, 120, len); ctx.setLineDash([]); }
+          ctx.fillStyle = sw ? 'rgba(251,113,133,0.7)' : 'rgba(251,113,133,0.25)';
+          ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 145, 80, 0, 0, Math.PI * 2); ctx.fill();
+          if (!sw) { ctx.strokeStyle = 'rgba(244,63,94,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.stroke(); ctx.setLineDash([]); }
+        } else if (boss.kind === 'squalo' && (boss.state === 'LUNGE' || boss.state === 'WINDUP')) {
+          if (boss.state === 'LUNGE') {
+            ctx.fillStyle = 'rgba(14,116,144,0.35)'; ctx.fillRect(Math.min(boss.x, boss.targetX) - 50, trackProgress - 40, Math.abs(boss.targetX - boss.x) + 100, 90);
+            ctx.strokeStyle = 'rgba(14,116,144,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+            ctx.strokeRect(Math.min(boss.x, boss.targetX) - 50, trackProgress - 40, Math.abs(boss.targetX - boss.x) + 100, 90); ctx.setLineDash([]);
+          } else {
+            ctx.strokeStyle = 'rgba(51,65,85,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
+            ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 80); ctx.stroke(); ctx.setLineDash([]);
+          }
         }
       }
 
@@ -931,20 +1120,40 @@
       ctx.restore();
 
       if (boss && boss.active) {
-        drawShadow(ctx, boss.x, boss.y - (boss.kind === 'sweeper' ? Sprites.CAST.sweeper.h * 0.85 * 0.8 - 12 : h0boss()), 90);
-        const sk = boss.kind === 'sweeper' ? 'sweeper' : 'boss';
-        const angry = boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'WINDUP' || boss.state === 'LUNGE', sc = 0.85, h = Sprites.CAST[sk].h * sc;
+        const sk = boss.sprite || bossMeta(boss.kind).sprite;
+        const sp = Sprites.CAST[sk];
+        const foot = sp.h * 0.85 * 0.8 - 12;
+        drawShadow(ctx, boss.x, boss.y - foot, boss.kind === 'squalo' ? 110 : 90);
+        const angry = boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'WINDUP' || boss.state === 'LUNGE' || boss.state === 'SWEEP';
+        const sc = boss.kind === 'squalo' ? 0.9 : 0.85, h = sp.h * sc;
         ctx.save(); ctx.scale(1, -1);
-        const fps = boss.state === 'SWEEP' ? 90 : 420;
+        const fps = (boss.state === 'SWEEP' || boss.kind === 'flamenco') ? 90 : 420;
         Sprites.draw(ctx, sk, boss.hitTime > 0 ? 'hit' : angry ? 2 : (Math.floor(performance.now() / fps) & 1), boss.x, -boss.y + h * 0.8, sc);
         ctx.restore();
       }
-      for (const d of entities.dust) { // rolling dust balls
+      for (const d of entities.dust) { // rolling orbs: dust / espresso / feather / shell
+        const fl = d.flavor || 'dust';
         ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.spin);
         ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, -d.r * 0.9, d.r, d.r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
-        for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = d.r * (0.45 + (k % 3) * 0.12); ctx.fillStyle = k % 2 ? '#d6c4a3' : '#e7d8bf'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(Math.cos(a) * d.r * 0.45, Math.sin(a) * d.r * 0.45, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(-d.r * 0.3, d.r * 0.3, d.r * 0.18, 0, Math.PI * 2); ctx.fill();
+        if (fl === 'shell') {
+          ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.85, d.r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(d.r * 0.35, 0, d.r * 0.22, 0, Math.PI * 2); ctx.fill();
+        } else if (fl === 'espresso') {
+          ctx.fillStyle = '#78350f'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(0, 0, d.r * 0.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#fef3c7'; ctx.fillRect(-d.r * 0.55, -d.r * 0.95, d.r * 1.1, d.r * 0.45);
+          ctx.strokeRect(-d.r * 0.55, -d.r * 0.95, d.r * 1.1, d.r * 0.45);
+          ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(-d.r * 0.2, d.r * 0.15, d.r * 0.15, 0, Math.PI * 2); ctx.fill();
+        } else if (fl === 'feather') {
+          ctx.fillStyle = '#fda4af'; ctx.strokeStyle = '#9f1239'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.4, d.r * 0.95, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, -d.r); ctx.lineTo(0, d.r); ctx.stroke();
+        } else {
+          for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = d.r * (0.45 + (k % 3) * 0.12); ctx.fillStyle = k % 2 ? '#d6c4a3' : '#e7d8bf'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(Math.cos(a) * d.r * 0.45, Math.sin(a) * d.r * 0.45, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(-d.r * 0.3, d.r * 0.3, d.r * 0.18, 0, Math.PI * 2); ctx.fill();
+        }
         ctx.restore();
       }
 
