@@ -105,7 +105,7 @@
   <div id="startModal" class="modal">
     <div class="card">
       <h1 style="color:#facc15; text-shadow:0 4px 0 #a16207;">TACTICAL RUSH</h1>
-      <p>Pick the right gates to grow your squad.<br>Dodge the Grump King's red laser.<br>Spend aura on upgrades between zones!</p>
+      <p>Steer from behind your squad in 3rd person.<br>Hit the right gates & ability checkpoints.<br>Dodge bosses and spend aura between zones!</p>
       <p class="best" id="startBest"></p>
       <p class="essence" id="essenceP"></p>
       <button class="btn gold" onclick="startGame()">TAP TO START</button>
@@ -465,27 +465,39 @@
       initLevel();
     }
 
-    function generateGateAction(isBad) {
+    function generateGateAction(isBad, forceForm) {
       if (isBad) {
         const loss = 8 + level * 2, r = Math.random();
         if (level >= 2 && r < 0.35) { const pc = level >= 5 ? 40 : 30; return { text: `-${pc}% SQUAD`, type: 'SQUADPCT', val: -pc / 100, isBad: true }; }
         return r < 0.65 ? { text: `-${loss} SQUAD`, type: 'SQUAD', val: -loss, isBad: true }
                         : { text: `-250 AURA`, type: 'AURA', val: -250, isBad: true };
       }
-      const r = Math.random();
-      if (r < 0.45) { const v = Math.floor(Math.random() * 12) + 6 + level * 2; return { text: `+${v} SQUAD`, type: 'SQUAD', val: v, cap: v + 8 }; }
-      if (r < 0.75) {
+      if (forceForm) {
         const f = ['WIDE', 'SPEARHEAD', 'GRID'][Math.floor(Math.random() * 3)];
-        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f };
+        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f, checkpoint: true };
+      }
+      const r = Math.random();
+      if (r < 0.42) { const v = Math.floor(Math.random() * 12) + 6 + level * 2; return { text: `+${v} SQUAD`, type: 'SQUAD', val: v, cap: v + 8 }; }
+      if (r < 0.72) {
+        const f = ['WIDE', 'SPEARHEAD', 'GRID'][Math.floor(Math.random() * 3)];
+        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f, checkpoint: true };
       }
       return { text: `+500 AURA`, type: 'AURA', val: 500 };
     }
-    function makeGatePair(y, allowBad) {
+    function makeGatePair(y, allowBad, forceAbility) {
+      // Ability checkpoints: one side is always a formation swap (clearly labeled in 3rd-person).
+      if (forceAbility) {
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        const form = generateGateAction(false, true);
+        const other = generateGateAction(false);
+        const left = side === 'left' ? form : other, right = side === 'right' ? form : other;
+        return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true, ability: true };
+      }
       const badSide = allowBad && Math.random() < 0.45 ? (Math.random() < 0.5 ? 'left' : 'right') : null;
       let left = generateGateAction(badSide === 'left'), right = generateGateAction(badSide === 'right');
       let guard = 0;
       while (!left.isBad && !right.isBad && left.text === right.text && guard++ < 10) right = generateGateAction(false);
-      return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true };
+      return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true, ability: !!(left.checkpoint || right.checkpoint) };
     }
     function spawnSwarmRow(y) {
       // 5 slots across the road; one is always left empty so there's a gap to slip through.
@@ -518,12 +530,16 @@
       save.bestZone = Math.max(save.bestZone, level); persist();
       updateAuraUI();
 
-      // Safe start: the first ~3 s only has a friendly gate; enemies begin further up the track.
+      // Safe start: friendly gate, then regular gates + ability checkpoints (formation swaps).
       entities.gates.push(makeGatePair(800, false));
-      let y = 1350;
+      let y = 1350, gateN = 0;
       const gap = Math.max(330, 500 - level * 25);
       while (y < trackLength - 500) {
-        if (Math.random() < Math.max(0.3, 0.44 - level * 0.02)) { entities.gates.push(makeGatePair(y, true)); y += 600; continue; }
+        if (Math.random() < Math.max(0.3, 0.44 - level * 0.02)) {
+          gateN++;
+          entities.gates.push(makeGatePair(y, true, gateN % 3 === 0)); // every 3rd gate pair is an ability checkpoint
+          y += 600; continue;
+        }
         const r = Math.random();
         if (r < 0.5) spawnSwarmRow(y);
         else spawnTanks(y);
@@ -1066,7 +1082,7 @@
             badgeUI.classList.add('tier-pop'); setTimeout(() => badgeUI.classList.remove('tier-pop'), 200);
           } else if (chosen.type === 'AURA') addAura(chosen.val);
           if (!chosen.isBad) { playSound('powerup'); buzz('light'); }
-          const label = chosen.type === 'SQUAD' && !chosen.isBad ? `+${Math.round(chosen.val)} SQUAD` : chosen.text;
+          const label = chosen.type === 'FORM' ? `ABILITY: ${chosen.val}` : (chosen.type === 'SQUAD' && !chosen.isBad ? `+${Math.round(chosen.val)} SQUAD` : chosen.text);
           addFloatText(squad.x, g.y, label, gateColor(chosen));
           spawnExplosion(chosen.x, g.y, gateColor(chosen), 30);
         }
@@ -1083,21 +1099,23 @@
       if (screenShake > 0) screenShake = Math.max(0, screenShake - rawDt * 40);
     }
 
-    // ----- Rendering -----
-    function drawVoxel(ctx, x, y, z, w, h, d, hexColor) {
-      const isoX = x; const isoY = y - z;
-      ctx.fillStyle = hexColor; ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX + w/2, isoY - h - d/3); ctx.lineTo(isoX, isoY - h - (2*d)/3); ctx.lineTo(isoX - w/2, isoY - h - d/3); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = adjustBrightness(hexColor, -25); ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX + w/2, isoY - h - d/3); ctx.lineTo(isoX + w/2, isoY - d/3); ctx.lineTo(isoX, isoY); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = adjustBrightness(hexColor, -45); ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX - w/2, isoY - h - d/3); ctx.lineTo(isoX - w/2, isoY - d/3); ctx.lineTo(isoX, isoY); ctx.closePath(); ctx.fill();
+    // ----- Rendering (3rd-person camera behind the squad) -----
+    // World: x left/right, y along the track (increasing ahead), z up.
+    // Camera sits behind the squad looking forward so you see your troopers from behind.
+    const CAM = { back: 260, height: 155, focal: 320, roadFar: 1400 };
+    function project(wx, wy, wz = 0) {
+      const dy = (wy - trackProgress) + CAM.back; // forward distance from camera
+      if (dy < 16) return null;
+      const s = CAM.focal / dy;
+      // Origin at bottom-center with y UP (scale y is flipped): near ≈ 0 (bottom), far climbs to horizon.
+      const yNear = CAM.height * (CAM.focal / CAM.back);
+      return { x: wx * s, y: yNear - (CAM.height - wz) * s, s, dy };
     }
     function adjustBrightness(hex, percent) {
-      let num = parseInt(hex.replace("#",""), 16), amt = Math.round(2.55 * percent);
+      let num = parseInt(hex.replace('#', ''), 16), amt = Math.round(2.55 * percent);
       let R = (num >> 16) + amt, G = (num >> 8 & 0x00FF) + amt, B = (num & 0x0000FF) + amt;
-      return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
+      return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
     }
-    function drawShadow(ctx, x, y, radius) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(x, y - radius*0.2, radius, radius*0.3, 0, 0, Math.PI*2); ctx.fill(); }
-
-    // Gate colours by effect: green = growth, red = loss, blue = formation, gold = aura
     function gateColor(side) {
       if (side.isBad) return '#ef4444';
       if (side.type === 'SQUAD') return '#22c55e';
@@ -1108,25 +1126,60 @@
       const n = parseInt(hex.slice(1), 16), m = c => Math.round(c + (255 - c) * t);
       return `rgb(${m(n >> 16)},${m((n >> 8) & 255)},${m(n & 255)})`;
     }
-    function drawGate(side, y) {
+    function drawShadowP(ctx, p, radius) {
+      if (!p) return;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath(); ctx.ellipse(p.x, p.y - radius * p.s * 0.08, radius * p.s, radius * p.s * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // Standing gate / ability arch in 3rd-person: vertical portal on the road, label billboarded.
+    function drawGateP(side, gy, isAbility) {
       const col = gateColor(side), flash = Math.min(1, side.hitTime / 0.12);
       const c = flash > 0 ? mixWhite(col, flash * 0.75) : col;
-      ctx.save(); ctx.translate(side.x, y);
-      ctx.globalAlpha = 0.28 + flash * 0.3; ctx.fillStyle = c; ctx.fillRect(-88, -7, 176, 14);
-      ctx.globalAlpha = 1; ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.strokeRect(-88, -7, 176, 14);
-      ctx.scale(1, -1);
-      let text = side.text; if (side.type === 'SQUAD' && !side.isBad) text = `+${Math.round(side.val)} SQUAD`;
-      ctx.font = font(15); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const tw = Math.min(170, ctx.measureText(text).width + 18);
-      ctx.fillStyle = 'rgba(2,6,23,0.85)'; ctx.beginPath(); ctx.roundRect(-tw / 2, 13, tw, 24, 12); ctx.fill();
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = side.isBad ? '#fecaca' : '#ffffff'; ctx.fillText(text, 0, 26, 160);
+      const foot = project(side.x, gy, 0), top = project(side.x, gy, isAbility ? 110 : 78);
+      if (!foot || !top) return;
+      const hw = (isAbility ? 78 : 70) * foot.s, thick = Math.max(3, 5 * foot.s);
+      // Portal slab
+      ctx.globalAlpha = 0.35 + flash * 0.35;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(foot.x - hw, foot.y); ctx.lineTo(foot.x + hw, foot.y);
+      ctx.lineTo(top.x + hw * 0.92, top.y); ctx.lineTo(top.x - hw * 0.92, top.y);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = c; ctx.lineWidth = thick;
+      ctx.stroke();
+      // Inner glow frame
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = Math.max(1.5, 2 * foot.s);
+      ctx.strokeRect(foot.x - hw * 0.72, top.y + (foot.y - top.y) * 0.15, hw * 1.44, (foot.y - top.y) * 0.7);
+      // Billboard label (readable in 3rd-person)
+      let text = side.text;
+      if (side.type === 'SQUAD' && !side.isBad) text = `+${Math.round(side.val)} SQUAD`;
+      if (side.checkpoint || side.type === 'FORM') text = `⚡ ${side.val || text}`;
+      const fs = Math.max(11, Math.min(22, 16 * foot.s * 1.15));
+      ctx.font = font(fs); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const label = text, tw = Math.min(hw * 1.8, ctx.measureText(label).width + 18 * foot.s);
+      const lx = (top.x + foot.x) / 2, ly = top.y + 22 * foot.s; // sit above the arch in screen space
+      // Camera y is flipped; un-flip for readable billboard text.
+      ctx.save(); ctx.translate(lx, ly); ctx.scale(1, -1);
+      ctx.font = font(fs); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(2,6,23,0.9)';
+      ctx.beginPath(); ctx.roundRect(-tw / 2, -12 * foot.s, tw, 24 * foot.s, 10 * foot.s); ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, 2 * foot.s); ctx.stroke();
+      ctx.fillStyle = side.isBad ? '#fecaca' : '#ffffff';
+      ctx.fillText(label, 0, 0, tw - 8);
+      if (isAbility || side.checkpoint) {
+        const banner = 'ABILITY CHECKPOINT';
+        ctx.font = font(Math.max(9, 11 * foot.s));
+        const bw = ctx.measureText(banner).width + 14 * foot.s;
+        ctx.fillStyle = 'rgba(14,165,233,0.95)';
+        ctx.beginPath(); ctx.roundRect(-bw / 2, -34 * foot.s, bw, 18 * foot.s, 8 * foot.s); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(banner, 0, -25 * foot.s);
+      }
       ctx.restore();
     }
 
-    const h0boss = () => Sprites.CAST.boss.h * 0.85 * 0.8 - 12; // boss feet below its anchor (shadow sits there)
+    const h0boss = () => Sprites.CAST.boss.h * 0.85 * 0.8 - 12;
     function render(rawDt) {
-      // Zone atmosphere drawn on the canvas itself: blue -> industrial orange -> purple arena
       const pct = trackProgress / trackLength;
       const target = (state === 'BOSS' || pct >= 0.8) ? ZONE_COLORS.arena : pct >= 0.4 ? ZONE_COLORS.industrial : ZONE_COLORS.train;
       const k = Math.min(1, (rawDt || 0.016) * 1.5);
@@ -1134,205 +1187,252 @@
       const bg = `rgb(${bgColor.map(Math.round).join(',')})`;
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-      const vg = ctx.createLinearGradient(0, 0, 0, H);
-      vg.addColorStop(0, 'rgba(2,6,23,0.55)'); vg.addColorStop(0.5, 'rgba(2,6,23,0)'); vg.addColorStop(1, 'rgba(2,6,23,0.35)');
-      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+      // Sky gradient (horizon at top)
+      const sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+      sky.addColorStop(0, 'rgba(2,6,23,0.85)'); sky.addColorStop(1, 'rgba(2,6,23,0)');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H * 0.55);
       document.body.style.backgroundColor = bg;
       $('damageOverlay').style.opacity = damageFlash > 0 ? '1' : '0';
       if (damageFlash > 0) damageFlash -= rawDt || 0.016;
 
-      const cy = H * 0.8;
       ctx.save();
       if (screenShake > 0) ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
-      ctx.translate(W / 2, cy); ctx.scale(VS, VS);
-      const top = -cy / VS, bottom = (H - cy) / VS;
+      // Bottom-center origin, y UP the screen (toward horizon)
+      ctx.translate(W / 2, H * 0.92); ctx.scale(VS, -VS);
 
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.45)'; ctx.fillRect(-ROAD_HALF, top, ROAD_HALF * 2, bottom - top);
-      ctx.fillStyle = '#38bdf8'; ctx.fillRect(-ROAD_HALF - 8, top, 8, bottom - top); ctx.fillRect(ROAD_HALF, top, 8, bottom - top);
-      const spacing = 180, offset = -(trackProgress % spacing);
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)'; ctx.lineWidth = 4;
-      for (let y = top + offset - spacing; y < bottom + spacing; y += spacing) { ctx.beginPath(); ctx.moveTo(-ROAD_HALF, y); ctx.lineTo(ROAD_HALF, y); ctx.stroke(); }
-
-      ctx.save(); ctx.scale(1, -1); ctx.translate(0, -trackProgress);
-
-      if (state !== 'START' && boss && boss.active) {
-        if (boss.kind === 'sweeper') {
-          if (boss.state === 'WINDUP') {
-            ctx.strokeStyle = 'rgba(231,216,191,0.85)'; ctx.lineWidth = 4; ctx.setLineDash([12, 10]);
-            ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 120); ctx.stroke(); ctx.setLineDash([]);
-          }
-          if (boss.state === 'LUNGE' || boss.state === 'SWEEP') {
-            const sw = boss.state === 'SWEEP';
-            ctx.fillStyle = sw ? 'rgba(231,216,191,0.75)' : 'rgba(239,68,68,0.25)';
-            ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 125, 70, 0, 0, Math.PI * 2); ctx.fill();
-            if (!sw) { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); }
-          }
-        } else if ((boss.kind === 'grump' || boss.kind === 'espresso') && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') && boss.lanes) {
-          const strike = boss.state === 'STRIKE';
-          const y0 = trackProgress - 260, len = boss.y - trackProgress + 260;
-          const col = boss.kind === 'espresso' ? (strike ? 'rgba(120,53,15,0.85)' : 'rgba(180,83,9,0.3)') : (strike ? 'rgba(239,68,68,0.85)' : 'rgba(239,68,68,0.28)');
-          const hot = boss.kind === 'espresso' ? 'rgba(254,243,199,0.8)' : 'rgba(255,255,255,0.75)';
-          for (const lx of boss.lanes) {
-            ctx.fillStyle = col; ctx.fillRect(lx - 60, y0, 120, len);
-            if (strike) { ctx.fillStyle = hot; ctx.fillRect(lx - 14, y0, 28, len); }
-            else { ctx.strokeStyle = boss.kind === 'espresso' ? 'rgba(180,83,9,0.95)' : 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.strokeRect(lx - 60, y0, 120, len); ctx.setLineDash([]); }
-          }
-        } else if (boss.kind === 'flamenco' && (boss.state === 'TELEGRAPH' || boss.state === 'LUNGE' || boss.state === 'SWEEP')) {
-          const sw = boss.state === 'SWEEP';
-          ctx.fillStyle = sw ? 'rgba(251,113,133,0.7)' : 'rgba(251,113,133,0.25)';
-          ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 145, 80, 0, 0, Math.PI * 2); ctx.fill();
-          if (!sw) { ctx.strokeStyle = 'rgba(244,63,94,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.stroke(); ctx.setLineDash([]); }
-        } else if (boss.kind === 'squalo' && (boss.state === 'LUNGE' || boss.state === 'WINDUP')) {
-          if (boss.state === 'LUNGE') {
-            ctx.fillStyle = 'rgba(14,116,144,0.35)'; ctx.fillRect(Math.min(boss.x, boss.targetX) - 50, trackProgress - 40, Math.abs(boss.targetX - boss.x) + 100, 90);
-            ctx.strokeStyle = 'rgba(14,116,144,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
-            ctx.strokeRect(Math.min(boss.x, boss.targetX) - 50, trackProgress - 40, Math.abs(boss.targetX - boss.x) + 100, 90); ctx.setLineDash([]);
-          } else {
-            ctx.strokeStyle = 'rgba(51,65,85,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]);
-            ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 80); ctx.stroke(); ctx.setLineDash([]);
-          }
-        } else if (boss.kind === 'yeti') {
-          if (boss.state === 'CAST' && boss.lanes && boss.frame < 7) {
-            for (const lx of boss.lanes) {
-              ctx.fillStyle = 'rgba(56,189,248,0.22)'; ctx.fillRect(lx - 55, trackProgress - 260, 110, boss.y - trackProgress + 260);
-              ctx.strokeStyle = 'rgba(125,211,252,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); ctx.strokeRect(lx - 55, trackProgress - 260, 110, boss.y - trackProgress + 260); ctx.setLineDash([]);
-            }
-          } else if (boss.state === 'CAST' && boss.lanes && boss.frame >= 7) {
-            for (const lx of boss.lanes) {
-              ctx.fillStyle = 'rgba(56,189,248,0.75)'; ctx.fillRect(lx - 28, trackProgress - 260, 56, boss.y - trackProgress + 260);
-              ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(lx - 8, trackProgress - 260, 16, boss.y - trackProgress + 260);
-            }
-          } else if (boss.state === 'OVERHEAD' && boss.frame < 8) {
-            ctx.fillStyle = 'rgba(148,163,184,0.28)'; ctx.beginPath(); ctx.ellipse(boss.targetX, trackProgress + 10, 110, 55, 0, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = 'rgba(226,232,240,0.95)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.stroke(); ctx.setLineDash([]);
-          } else if (boss.state === 'SPECIAL' && boss.frame >= 1 && boss.frame <= 2) {
-            ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(boss.x, boss.y - 70, 50, 0, Math.PI * 2); ctx.fill();
-          }
+      // Perspective road trapezoid
+      const nearL = project(-ROAD_HALF, trackProgress, 0), nearR = project(ROAD_HALF, trackProgress, 0);
+      const farL = project(-ROAD_HALF, trackProgress + CAM.roadFar, 0), farR = project(ROAD_HALF, trackProgress + CAM.roadFar, 0);
+      if (nearL && nearR && farL && farR) {
+        ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+        ctx.beginPath();
+        ctx.moveTo(nearL.x, nearL.y); ctx.lineTo(nearR.x, nearR.y);
+        ctx.lineTo(farR.x, farR.y); ctx.lineTo(farL.x, farL.y); ctx.closePath(); ctx.fill();
+        // Curbs
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(nearL.x, nearL.y); ctx.lineTo(farL.x, farL.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(nearR.x, nearR.y); ctx.lineTo(farR.x, farR.y); ctx.stroke();
+        // Distance stripes
+        ctx.strokeStyle = 'rgba(56,189,248,0.22)'; ctx.lineWidth = 2;
+        for (let d = 40; d < CAM.roadFar; d += 160) {
+          const a = project(-ROAD_HALF + 12, trackProgress + d, 0), b = project(ROAD_HALF - 12, trackProgress + d, 0);
+          if (!a || !b) continue;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
         }
       }
 
-      for (const g of entities.gates) { if (!g.active) continue; drawGate(g.left, g.y); drawGate(g.right, g.y); }
+      // Collect drawables far→near for proper overlap
+      const drawList = [];
+      const push = (dy, fn) => { if (dy != null) drawList.push({ dy, fn }); };
 
-      // Characters are atlas sprites (js/sprites.js). They're drawn in an un-flipped pass, centred on the same anchor
-      // the hitboxes use, so gameplay and collisions are unchanged.
-      const anim = Math.floor(performance.now() / 160) & 1;
-      for (const e of entities.enemies) if (e.active) { const t = e.type === 'TANK'; drawShadow(ctx, e.x, e.y - (t ? 58 * 1.15 : 52 * 1.1) * 0.42 + 6, t ? 34 : 20); }
-      ctx.save(); ctx.scale(1, -1);
-      for (let i = entities.enemies.length - 1; i >= 0; i--) {   // far (higher y) first so nearer ones overlap
-        const e = entities.enemies[i]; if (!e.active) continue;
-        const key = e.type === 'TANK' ? 'tank' : (e.skin || 'swarmA'), sp = Sprites.CAST[key];
-        const sc = e.type === 'TANK' ? 1.15 : 1.1, h = sp.h * sc, footY = -e.y + h * 0.42;
-        Sprites.draw(ctx, key, e.hitTime > 0 ? 'hit' : (anim ^ (e.phase > Math.PI ? 1 : 0)), e.x, footY, sc);
-        const by = footY - h - 7;
-        ctx.fillStyle = '#000'; ctx.fillRect(e.x - 20, by, 40, 6);
-        ctx.fillStyle = '#ef4444'; ctx.fillRect(e.x - 20, by, 40 * Math.max(0, e.hp / e.maxHp), 6);
+      // Boss telegraphs (world-space projected)
+      if (state !== 'START' && boss && boss.active) {
+        push(boss.y - trackProgress + CAM.back, () => {
+          if (boss.kind === 'sweeper' && boss.state === 'WINDUP') {
+            const a = project(boss.x, boss.y - 40, 40), b = project(boss.targetX, trackProgress + 40, 0);
+            if (a && b) { ctx.strokeStyle = 'rgba(231,216,191,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]); }
+          } else if ((boss.kind === 'grump' || boss.kind === 'espresso') && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') && boss.lanes) {
+            const strike = boss.state === 'STRIKE';
+            for (const lx of boss.lanes) {
+              const a = project(lx - 55, trackProgress + 20, 0), b = project(lx + 55, trackProgress + 20, 0);
+              const c = project(lx - 40, boss.y, 0), d = project(lx + 40, boss.y, 0);
+              if (!a || !b || !c || !d) continue;
+              ctx.fillStyle = boss.kind === 'espresso'
+                ? (strike ? 'rgba(120,53,15,0.75)' : 'rgba(180,83,9,0.28)')
+                : (strike ? 'rgba(239,68,68,0.75)' : 'rgba(239,68,68,0.25)');
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+              if (!strike) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.stroke(); ctx.setLineDash([]); }
+            }
+          } else if (boss.kind === 'yeti' && boss.state === 'CAST' && boss.lanes) {
+            for (const lx of boss.lanes) {
+              const a = project(lx - 40, trackProgress + 20, 0), b = project(lx + 40, trackProgress + 20, 0);
+              const c = project(lx - 24, boss.y, 0), d = project(lx + 24, boss.y, 0);
+              if (!a || !b || !c || !d) continue;
+              ctx.fillStyle = boss.frame >= 7 ? 'rgba(56,189,248,0.7)' : 'rgba(56,189,248,0.25)';
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+            }
+          } else if (boss.kind === 'yeti' && boss.state === 'OVERHEAD' && boss.frame < 8) {
+            const p = project(boss.targetX, trackProgress + 10, 0);
+            if (p) { ctx.fillStyle = 'rgba(148,163,184,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 90 * p.s, 28 * p.s, 0, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = 'rgba(226,232,240,0.95)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]); }
+          } else if ((boss.kind === 'flamenco' || boss.kind === 'sweeper') && (boss.state === 'LUNGE' || boss.state === 'SWEEP')) {
+            const p = project(boss.x, trackProgress + 10, 0);
+            if (p) { ctx.fillStyle = boss.state === 'SWEEP' ? 'rgba(251,113,133,0.55)' : 'rgba(239,68,68,0.25)';
+              ctx.beginPath(); ctx.ellipse(p.x, p.y, 120 * p.s, 40 * p.s, 0, 0, Math.PI * 2); ctx.fill(); }
+          } else if (boss.kind === 'squalo' && boss.state === 'LUNGE') {
+            const a = project(Math.min(boss.x, boss.targetX) - 40, trackProgress, 0);
+            const b = project(Math.max(boss.x, boss.targetX) + 40, trackProgress, 0);
+            if (a && b) { ctx.fillStyle = 'rgba(14,116,144,0.35)'; ctx.fillRect(a.x, a.y - 20 * a.s, b.x - a.x, 40 * a.s); }
+          }
+        });
       }
-      ctx.restore();
+
+      for (const g of entities.gates) {
+        if (!g.active) continue;
+        const ability = g.ability || g.left.checkpoint || g.right.checkpoint;
+        push(g.y - trackProgress + CAM.back, () => {
+          drawGateP(g.left, g.y, ability && g.left.checkpoint);
+          drawGateP(g.right, g.y, ability && g.right.checkpoint);
+          // Center stripe marker for ability checkpoints
+          if (ability) {
+            const a = project(-20, g.y, 2), b = project(20, g.y, 2);
+            if (a && b) {
+              ctx.strokeStyle = 'rgba(56,189,248,0.85)'; ctx.lineWidth = Math.max(2, 3 * a.s); ctx.setLineDash([8 * a.s, 6 * a.s]);
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+            }
+          }
+        });
+      }
+
+      const anim = Math.floor(performance.now() / 160) & 1;
+      for (const e of entities.enemies) {
+        if (!e.active) continue;
+        push(e.y - trackProgress + CAM.back, () => {
+          const key = e.type === 'TANK' ? 'tank' : (e.skin || 'swarmA'), sp = Sprites.CAST[key];
+          const sc0 = e.type === 'TANK' ? 1.15 : 1.1;
+          const p = project(e.x, e.y, 0); if (!p) return;
+          drawShadowP(ctx, p, e.type === 'TANK' ? 34 : 20);
+          const sc = sc0 * p.s * 0.95;
+          ctx.save();
+          // Sprites.draw expects y-down local with feet at (x,y); our y grows up, so flip locally
+          ctx.translate(p.x, p.y); ctx.scale(1, -1);
+          Sprites.draw(ctx, key, e.hitTime > 0 ? 'hit' : (anim ^ (e.phase > Math.PI ? 1 : 0)), 0, sp.h * sc * 0.05, sc);
+          const bw = 40 * p.s, by = -sp.h * sc - 8 * p.s;
+          ctx.fillStyle = '#000'; ctx.fillRect(-bw / 2, by, bw, 5 * p.s);
+          ctx.fillStyle = '#ef4444'; ctx.fillRect(-bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 5 * p.s);
+          ctx.restore();
+        });
+      }
 
       if (boss && boss.active) {
-        if (boss.kind === 'yeti') {
-          const foot = 120 * 0.85 - 8;
-          drawShadow(ctx, boss.x, boss.y - foot, 100);
-          ctx.save(); ctx.scale(1, -1);
-          const anim = boss.anim || 'attack', fr = boss.frame | 0;
-          if (boss.hitTime > 0 && !boss.dying) {
-            ctx.globalAlpha = 0.85; ctx.filter = 'brightness(2.2)';
+        push(boss.y - trackProgress + CAM.back, () => {
+          const p = project(boss.x, boss.y, 0); if (!p) return;
+          drawShadowP(ctx, p, boss.kind === 'squalo' ? 110 : 95);
+          ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, -1);
+          if (boss.kind === 'yeti') {
+            const sc = 0.95 * Math.min(1.35, p.s * 1.05);
+            if (boss.hitTime > 0 && !boss.dying) { ctx.globalAlpha = 0.85; ctx.filter = 'brightness(2.2)'; }
+            if (!Sprites.Yeti.draw(ctx, boss.anim || 'attack', boss.frame | 0, 0, 8, sc)) {
+              Sprites.draw(ctx, 'yeti', 0, 0, 100, sc * 0.9);
+            }
+            ctx.filter = 'none'; ctx.globalAlpha = 1;
+          } else {
+            const sk = boss.sprite || bossMeta(boss.kind).sprite;
+            const sp = Sprites.CAST[sk];
+            const angry = boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'WINDUP' || boss.state === 'LUNGE' || boss.state === 'SWEEP';
+            const sc = (boss.kind === 'squalo' ? 0.9 : 0.85) * Math.min(1.4, p.s * 1.05);
+            const fps = (boss.state === 'SWEEP' || boss.kind === 'flamenco') ? 90 : 420;
+            Sprites.draw(ctx, sk, boss.hitTime > 0 ? 'hit' : angry ? 2 : (Math.floor(performance.now() / fps) & 1), 0, sp.h * sc * 0.05, sc);
           }
-          if (!Sprites.Yeti.draw(ctx, anim, fr, boss.x, -boss.y + 8, 0.95)) {
-            Sprites.draw(ctx, 'yeti', 0, boss.x, -boss.y + 100, 0.9);
-          }
-          ctx.filter = 'none'; ctx.globalAlpha = 1; ctx.restore();
-        } else {
-          const sk = boss.sprite || bossMeta(boss.kind).sprite;
-          const sp = Sprites.CAST[sk];
-          const foot = sp.h * 0.85 * 0.8 - 12;
-          drawShadow(ctx, boss.x, boss.y - foot, boss.kind === 'squalo' ? 110 : 90);
-          const angry = boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'WINDUP' || boss.state === 'LUNGE' || boss.state === 'SWEEP';
-          const sc = boss.kind === 'squalo' ? 0.9 : 0.85, h = sp.h * sc;
-          ctx.save(); ctx.scale(1, -1);
-          const fps = (boss.state === 'SWEEP' || boss.kind === 'flamenco') ? 90 : 420;
-          Sprites.draw(ctx, sk, boss.hitTime > 0 ? 'hit' : angry ? 2 : (Math.floor(performance.now() / fps) & 1), boss.x, -boss.y + h * 0.8, sc);
           ctx.restore();
-        }
-      }
-      for (const d of entities.dust) { // rolling orbs: dust / espresso / feather / shell
-        const fl = d.flavor || 'dust';
-        ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.spin);
-        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(0, -d.r * 0.9, d.r, d.r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
-        if (fl === 'shell') {
-          ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.85, d.r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(d.r * 0.35, 0, d.r * 0.22, 0, Math.PI * 2); ctx.fill();
-        } else if (fl === 'espresso') {
-          ctx.fillStyle = '#78350f'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(0, 0, d.r * 0.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.fillStyle = '#fef3c7'; ctx.fillRect(-d.r * 0.55, -d.r * 0.95, d.r * 1.1, d.r * 0.45);
-          ctx.strokeRect(-d.r * 0.55, -d.r * 0.95, d.r * 1.1, d.r * 0.45);
-          ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.arc(-d.r * 0.2, d.r * 0.15, d.r * 0.15, 0, Math.PI * 2); ctx.fill();
-        } else if (fl === 'feather') {
-          ctx.fillStyle = '#fda4af'; ctx.strokeStyle = '#9f1239'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.4, d.r * 0.95, 0.4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, -d.r); ctx.lineTo(0, d.r); ctx.stroke();
-        } else {
-          for (let k = 0; k < 7; k++) { const a = k * 0.9, rr = d.r * (0.45 + (k % 3) * 0.12); ctx.fillStyle = k % 2 ? '#d6c4a3' : '#e7d8bf'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(Math.cos(a) * d.r * 0.45, Math.sin(a) * d.r * 0.45, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
-          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(-d.r * 0.3, d.r * 0.3, d.r * 0.18, 0, Math.PI * 2); ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      ctx.lineCap = 'round'; // purple aura beams (matches the mullet dude's staff beam)
-      for (const [lw, col] of [[9, 'rgba(168,85,247,0.55)'], [4, '#f0abfc']]) {
-        ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.beginPath();
-        for (const b of entities.bullets) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y - 22); }
-        ctx.stroke();
-      }
-
-      if (state !== 'START') {
-        ctx.save(); ctx.translate(squad.drawX, trackProgress);
-        const count = Math.max(1, Math.ceil(squad.visualCount));
-        const { slots, hw } = formationLayout(count, squad.formation);
-        drawShadow(ctx, 0, 0, Math.max(40, hw + 10));
-        AuraBox.drawEquipped(ctx, hw, performance.now() / 1000); // cosmetic aura from the Aura Index
-        if (shieldCharges > 0) {
-          ctx.strokeStyle = 'rgba(250,204,21,0.7)'; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.ellipse(0, -10, hw + 22, (hw + 22) * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
-        }
-        ctx.save(); ctx.scale(1, -1);
-        let depth = 0; for (const s of slots) depth = Math.max(depth, -s[1]);
-        const tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * 0.82;
-        if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
-        const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
-        slots.forEach(([ox, oy], i) => {
-          const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 4;
-          Sprites.draw(ctx, tKey, flashOn ? 'hit' : (anim + i) & 1, ox, -oy + th * 0.45 - bob, 0.82);
         });
-        const label = `x${Math.max(0, Math.ceil(squad.count))}`;
-        ctx.font = font(14); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const lw = Math.max(60, ctx.measureText(label).width + 22);
-        const py = depth + 26; // pill sits just behind the last row
-        ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.roundRect(-lw / 2, py, lw, 24, 12); ctx.fill();
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.fillText(label, 0, py + 13);
-        ctx.restore();
-        ctx.restore();
       }
 
-      for (const p of entities.particles) { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
-      ctx.font = font(20); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
-      for (const t of entities.texts) {
-        ctx.save(); ctx.translate(t.x, t.y); ctx.scale(1, -1);
-        ctx.globalAlpha = Math.min(1, t.life * 3); ctx.fillStyle = t.color;
-        ctx.strokeText(t.str, 0, 0); ctx.fillText(t.str, 0, 0);
-        ctx.restore();
+      for (const d of entities.dust) {
+        push(d.y - trackProgress + CAM.back, () => {
+          const p = project(d.x, d.y, d.r * 0.4); if (!p) return;
+          const fl = d.flavor || 'dust', r = d.r * p.s;
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(d.spin);
+          if (fl === 'shell') {
+            ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(0, 0, r * 0.85, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(r * 0.35, 0, r * 0.22, 0, Math.PI * 2); ctx.fill();
+          } else if (fl === 'espresso') {
+            ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fef3c7'; ctx.fillRect(-r * 0.55, -r * 0.95, r * 1.1, r * 0.45);
+          } else if (fl === 'feather') {
+            ctx.fillStyle = '#fda4af'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4, r * 0.95, 0.4, 0, Math.PI * 2); ctx.fill();
+          } else {
+            for (let k = 0; k < 6; k++) {
+              const a = k * 1.05; ctx.fillStyle = k % 2 ? '#d6c4a3' : '#e7d8bf';
+              ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, r * 0.4, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+          ctx.restore();
+        });
       }
-      ctx.restore(); ctx.restore();
-      if (dustBlind > 0) { // dust haze after a Dust Bawl hit
+
+      for (const b of entities.bullets) {
+        push(b.y - trackProgress + CAM.back, () => {
+          const a = project(b.x, b.y, 18), c = project(b.x, b.y + 28, 22);
+          if (!a || !c) return;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = 'rgba(168,85,247,0.55)'; ctx.lineWidth = Math.max(2, 7 * a.s);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+          ctx.strokeStyle = '#f0abfc'; ctx.lineWidth = Math.max(1.5, 3 * a.s);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+        });
+      }
+
+      // Squad — closest to camera, drawn last among world objects but we sort by dy so push with small dy
+      if (state !== 'START') {
+        push(CAM.back + 1, () => {
+          const count = Math.max(1, Math.ceil(squad.visualCount));
+          const { slots, hw } = formationLayout(count, squad.formation);
+          const base = project(squad.drawX, trackProgress, 0); if (!base) return;
+          drawShadowP(ctx, base, Math.max(40, hw + 10));
+          if (shieldCharges > 0) {
+            ctx.strokeStyle = 'rgba(250,204,21,0.75)'; ctx.lineWidth = Math.max(2, 3 * base.s);
+            ctx.beginPath(); ctx.ellipse(base.x, base.y - 8 * base.s, (hw + 22) * base.s, (hw + 22) * base.s * 0.32, 0, 0, Math.PI * 2); ctx.stroke();
+          }
+          // Cosmetic aura (scaled)
+          ctx.save(); ctx.translate(base.x, base.y); ctx.scale(base.s, base.s);
+          try { AuraBox.drawEquipped(ctx, hw, performance.now() / 1000); } catch (e) { /* ignore */ }
+          ctx.restore();
+          const tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * 0.82;
+          if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
+          const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
+          // Sort slots so farther rows (negative oy in formation = behind) draw first
+          const ordered = slots.map((s, i) => ({ s, i })).sort((a, b) => a.s[1] - b.s[1]);
+          for (const { s: [ox, oy], i } of ordered) {
+            // oy is negative for back rows in formation; in world, back rows are slightly behind squad
+            const wy = trackProgress + oy * 0.85;
+            const p = project(squad.drawX + ox, wy, 0); if (!p) continue;
+            const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 3 * p.s;
+            const sc = 0.82 * p.s;
+            ctx.save(); ctx.translate(p.x, p.y + bob); ctx.scale(1, -1);
+            Sprites.draw(ctx, tKey, flashOn ? 'hit' : (anim + i) & 1, 0, th * sc * 0.05, sc);
+            ctx.restore();
+          }
+          const label = `x${Math.max(0, Math.ceil(squad.count))}`;
+          ctx.save(); ctx.translate(base.x, base.y - 26 * base.s); ctx.scale(1, -1);
+          ctx.font = font(Math.max(12, 14 * base.s)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          const lw = Math.max(54 * base.s, ctx.measureText(label).width + 20 * base.s);
+          ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.roundRect(-lw / 2, -11 * base.s, lw, 22 * base.s, 11 * base.s); ctx.fill();
+          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = '#fff'; ctx.fillText(label, 0, 0);
+          ctx.restore();
+        });
+      }
+
+      for (const p of entities.particles) {
+        push((p.y - trackProgress) + CAM.back, () => {
+          const q = project(p.x, p.y, Math.abs(p.size)); if (!q) return;
+          ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(1.5, p.size * q.s), 0, Math.PI * 2); ctx.fill();
+        });
+      }
+      for (const t of entities.texts) {
+        push((t.y - trackProgress) + CAM.back, () => {
+          const q = project(t.x, t.y, 40); if (!q) return;
+          ctx.save(); ctx.translate(q.x, q.y); ctx.scale(1, -1);
+          ctx.font = font(Math.max(14, 20 * q.s)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.lineWidth = Math.max(2, 4 * q.s); ctx.strokeStyle = '#000';
+          ctx.globalAlpha = Math.min(1, t.life * 3); ctx.fillStyle = t.color;
+          ctx.strokeText(t.str, 0, 0); ctx.fillText(t.str, 0, 0);
+          ctx.restore();
+        });
+      }
+
+      drawList.sort((a, b) => b.dy - a.dy); // far first
+      for (const d of drawList) d.fn();
+
+      ctx.restore();
+      if (dustBlind > 0) {
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const W = ctx.canvas.width, H = ctx.canvas.height, g = ctx.createRadialGradient(W / 2, H * 0.75, W * 0.15, W / 2, H * 0.6, W * 0.9);
+        const Wc = ctx.canvas.width, Hc = ctx.canvas.height, g = ctx.createRadialGradient(Wc / 2, Hc * 0.75, Wc * 0.15, Wc / 2, Hc * 0.6, Wc * 0.9);
         const a = Math.min(1, dustBlind / 1.4) * 0.85;
         g.addColorStop(0, `rgba(214,196,163,${a * 0.35})`); g.addColorStop(1, `rgba(150,128,96,${a})`);
-        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+        ctx.fillStyle = g; ctx.fillRect(0, 0, Wc, Hc); ctx.restore();
       }
     }
 
