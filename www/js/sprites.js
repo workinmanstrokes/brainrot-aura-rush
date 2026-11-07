@@ -46,14 +46,18 @@
   // Mullet dude: Michael's own Grok Imagine art, cut from his reference sheet by tools/art/grok-cut.py into
   // www/assets/hero/*.png. Each evolution stage has 2 frames; the atlas is rebuilt once the images load.
   let atlas = null;
-  const HERO = {}, HERO_FR = { 1: ['mullet_base', 'mullet_base'], 2: ['mullet_run1', 'mullet_run2'], 3: ['mullet_caped', 'mullet_caped'], 4: ['mullet_armor', 'mullet_armor'] };
-  if (typeof Image !== 'undefined') for (const k of ['mullet_base', 'mullet_run1', 'mullet_run2', 'mullet_caped', 'mullet_armor']) { const im = new Image(); im.onload = () => { atlas = null; }; im.src = 'assets/hero/' + k + '.png'; HERO[k] = im; }
+  // Stage 1 is a single standing pose (no second drawing was cut). Stages 2–4 use the
+  // real two-frame runs already in assets/hero so the stride can plant instead of bobbing a statue.
+  const HERO = {}, HERO_FR = { 1: ['mullet_base', 'mullet_base'], 2: ['mullet_run1', 'mullet_run2'], 3: ['caped_run1', 'caped_run2'], 4: ['armor_run1', 'armor_run2'] };
+  if (typeof Image !== 'undefined') for (const k of ['mullet_base', 'mullet_run1', 'mullet_run2', 'caped_run1', 'caped_run2', 'armor_run1', 'armor_run2']) { const im = new Image(); im.onload = () => { atlas = null; }; im.src = 'assets/hero/' + k + '.png'; HERO[k] = im; }
   function drawHero(c, f, stage, W, H) {
-    const im = HERO[HERO_FR[stage][f ? 1 : 0]];
+    const pair = HERO_FR[stage] || HERO_FR[1];
+    const im = HERO[pair[f ? 1 : 0]];
     if (!im || !im.complete || !im.naturalWidth) { blob(c, 0, -H * 0.4, W * 0.3, H * 0.4, '#d4ff1e', 1.3); return; }
-    const k = Math.min(W / im.naturalWidth, H / im.naturalHeight), dw = im.naturalWidth * k, dh = im.naturalHeight * k, bob = (f && HERO_FR[stage][0] === HERO_FR[stage][1]) ? H * 0.03 : 0;
-    ell(c, 0, -0.5, dw * 0.32, 1.6); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill(); // ground shadow
-    c.drawImage(im, -dw / 2, -dh - bob, dw, dh);
+    // Height-fit keeps the feet on the origin across the two poses (no vertical pop).
+    const k = H / im.naturalHeight, dw = im.naturalWidth * k, dh = H;
+    ell(c, 0, -0.5, dw * 0.28, 1.6); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill();
+    c.drawImage(im, -dw / 2, -dh, dw, dh);
   }
   function drawWasher(c, f, P) {
       const b = f ? 1 : 0, SKIN = '#f6c7a1';
@@ -367,6 +371,11 @@
       // images not ready yet (unit tests / first paint): soft silhouette so atlas build never crashes
       blob(c, 0, -70, 36, 55, '#e8eef7', 1.5); blob(c, 0, -118, 22, 22, '#f8fafc', 1.2);
     } },
+    // Boss 7: Asciero Argento — Michael's silver axe warden. Runtime uses Sprites.Argento.
+    argento: { name: 'Asciero Argento, the Silver Warden', role: 'Boss', w: 136, h: 150, frames: 2, draw(c, f) {
+      if (ARGENTO.drawTo(c, 'idle', 0, 0, 0, 136 / 384)) return;
+      blob(c, 0, -72, 40, 58, '#cbd5e1', 1.5); blob(c, 0, -124, 24, 22, '#f8fafc', 1.2);
+    } },
   };
 
 
@@ -410,6 +419,45 @@
     return { anims, frame, draw, drawTo, ready: () => ready >= total && total > 0, count: () => total };
   })();
 
+  // ---------- Asciero Argento (Michael's axe-warden strips) ----------
+  // 10-frame strips under assets/argento/. No spin strip was provided.
+  const ARGENTO = (() => {
+    const names = ['idle', 'run', 'hurt', 'death', 'overhead', 'leap', 'cast'];
+    const anims = {};
+    let ready = 0, total = names.length * 10;
+    if (typeof Image !== 'undefined') {
+      for (const anim of names) {
+        anims[anim] = [];
+        for (let i = 0; i < 10; i++) {
+          const im = new Image();
+          im.onload = () => { ready++; atlas = null; };
+          im.src = `assets/argento/${anim}_${i}.png`;
+          anims[anim][i] = im;
+        }
+      }
+    } else {
+      for (const anim of names) { anims[anim] = []; for (let i = 0; i < 10; i++) anims[anim][i] = null; }
+    }
+    function frame(anim, i) {
+      const list = anims[anim] || anims.idle;
+      const im = list[Math.max(0, Math.min(list.length - 1, i | 0))];
+      return im && im.complete && im.naturalWidth ? im : null;
+    }
+    function drawTo(c, anim, i, x, y, worldW) {
+      const im = frame(anim, i); if (!im) return false;
+      const k = worldW / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      c.drawImage(im, x - dw / 2, y - dh, dw, dh);
+      return true;
+    }
+    function draw(ctx, anim, i, x, footY, scale = 1) {
+      const im = frame(anim, i); if (!im) return false;
+      const w = 136 * scale, k = w / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      ctx.drawImage(im, x - dw / 2, footY - dh, dw, dh);
+      return true;
+    }
+    return { anims, frame, draw, drawTo, ready: () => ready >= total && total > 0, count: () => total };
+  })();
+
   // ---------- Atlas ----------
   const PX = 3; // atlas pixels per world unit (sprites are drawn at <= ~2.6 px/unit on phones)
   const frames = {};
@@ -417,7 +465,7 @@
     const doc = root.document; if (!doc) return;
     const pad = 4; let x = 0, y = 0, rowH = 0; const maxW = 1800, place = [];
     for (const key in CAST) {
-      const s = CAST[key], px = (key === 'boss' || key === 'sweeper' || key === 'espresso' || key === 'flamenco' || key === 'squaloBoss' || key === 'yeti') ? 2 : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
+      const s = CAST[key], px = (key === 'boss' || key === 'sweeper' || key === 'espresso' || key === 'flamenco' || key === 'squaloBoss' || key === 'yeti' || key === 'argento') ? 2 : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
       const list = [...Array(s.frames).keys(), 'hit'];
       for (const fr of list) { if (x + fw > maxW) { x = 0; y += rowH; rowH = 0; } place.push({ key, fr, x, y, fw, fh, px }); x += fw; rowH = Math.max(rowH, fh); }
     }
@@ -440,5 +488,5 @@
     const s = CAST[key], w = (s.w + f.pad * 2) * scale, h = (s.h + f.pad * 2) * scale;
     ctx.drawImage(atlas, f.sx, f.sy, f.sw, f.sh, x - w / 2, y - h + f.pad * scale, w, h);
   }
-  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas, Yeti: YETI };
+  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas, Yeti: YETI, Argento: ARGENTO };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -162,6 +162,8 @@
   <script src="js/portal.js"></script>
   <script src="js/ads.js"></script>
   <script src="js/sprites.js"></script>
+  <script src="js/motion.js"></script>
+  <script src="js/axe-boss.js"></script>
   <script src="js/aurabox.js"></script>
   <script>
     const canvas = document.getElementById('gameCanvas');
@@ -206,6 +208,14 @@
     }
     window.addEventListener('resize', resize);
     resize();
+    // Decorative motion only. Steering, hitboxes and attack telegraphs stay on either way.
+    let reducedMotion = false;
+    try {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const applyRM = () => { reducedMotion = !!mq.matches; };
+      applyRM();
+      if (mq.addEventListener) mq.addEventListener('change', applyRM);
+    } catch (e) { /* matchMedia missing */ }
 
     // ----- Persistence -----
     const SAVE_KEY = 'brainrot-aura-rush-v1';
@@ -338,12 +348,13 @@
     let upgrades = { recruits: 0, rate: 0, dmg: 0, shield: 0 };
     const upgradeCost = k => Math.round(UPGRADES[k].base * Math.pow(1.6, upgrades[k]) / 50) * 50;
 
-    const squad = { x: 0, targetX: 0, drawX: 0, count: 8, visualCount: 8, formation: 'GRID', fireRate: 4.5, fireRange: 550, shootTimer: 0 };
+    const squad = { x: 0, targetX: 0, drawX: 0, count: 8, visualCount: 8, formation: 'GRID', fireRate: 4.5, fireRange: 550, shootTimer: 0, motion: Motion.create() };
     const entities = { bullets: [], gates: [], enemies: [], particles: [], texts: [], dust: [] };
     let boss = null;
     let dustBlind = 0, dustSlow = 0; // Dust Bawl hit: brief haze over the screen + sluggish steering
     // Boss roster (cycles by zone). Restored cut cast: Espressorilla, Flamenco Rotorina, Squalo Supremo + the two live bosses.
-    // ?boss=grump|sweeper|espresso|flamenco|squalo|yeti forces one for testing.
+    // ?boss=grump|sweeper|espresso|flamenco|squalo|yeti|argento forces one for testing
+    // and shortens the zone so the fight is a few seconds away.
     const BOSS_ROSTER = [
       { kind: 'grump',     sprite: 'boss',       name: 'TESTONE BAFFOLINI',      shout: 'GRUMP KING!',          hpMul: 1 },
       { kind: 'sweeper',   sprite: 'sweeper',    name: 'THE SWEEPING OLD MAN',   shout: 'DUST BAWL INCOMING!',  hpMul: 0.9 },
@@ -351,6 +362,7 @@
       { kind: 'flamenco',  sprite: 'flamenco',   name: 'FLAMENCO ROTORINA',      shout: 'ROTOR RUSH!',          hpMul: 0.95 },
       { kind: 'squalo',    sprite: 'squaloBoss', name: 'SQUALO SUPREMO',         shout: 'CANNON BARRAGE!',      hpMul: 1.1 },
       { kind: 'yeti',      sprite: 'yeti',       name: 'YETI SCUDIERO',          shout: 'FROST AXE FALLS!',     hpMul: 1.15 },
+      { kind: 'argento',   sprite: 'argento',    name: 'ASCIERO ARGENTO',        shout: 'SILVER AXE!',          hpMul: 1.2 },
     ];
     const BOSS_FORCE = (new URLSearchParams(location.search).get('boss') || '').toLowerCase();
     const bossMeta = (kind) => BOSS_ROSTER.find(b => b.kind === kind) || BOSS_ROSTER[0];
@@ -518,7 +530,9 @@
     function initLevel() {
       state = 'PLAYING'; trackProgress = 0; zoneTime = 0;
       trackLength = 5000 + level * 1000; baseSpeed = 240 + level * 10;
+      if (BOSS_FORCE) trackLength = 980; // ?boss= playtest: the gate is a few seconds up the road
       squad.x = 0; squad.targetX = 0; squad.drawX = 0; squad.formation = 'GRID'; squad.shootTimer = 0;
+      squad.motion = Motion.create();
       squad.fireRate = 4.5 * (1 + 0.15 * upgrades.rate) * (1 + 0.03 * meta.lv.spd);
       squad.count = Math.max(8 + upgrades.recruits * 4 + meta.lv.hp * 2, carrySquad); squad.visualCount = squad.count;
       shieldCharges = upgrades.shield; lastStandUsed = false; zoneBonusUsed = false; squadOfferShown = false;
@@ -553,7 +567,7 @@
       state = 'BOSS'; kind = kind || bossKind();
       const meta = bossMeta(kind);
       const hp = Math.round(bossHp() * meta.hpMul);
-      boss = { kind, sprite: meta.sprite, x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false, near: 0, attacks: 0, dir: 1, swept: false, anim: 'attack', frame: 0, animT: 0, dying: false };
+      boss = { kind, sprite: meta.sprite, x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false, near: 0, attacks: 0, dir: 1, swept: false, anim: kind === 'argento' ? 'idle' : 'attack', frame: 0, animT: 0, dying: false, flinch: 0, flinchCd: 0, runDist: 0 };
       entities.dust = entities.dust || []; entities.dust.length = 0; dustBlind = 0; dustSlow = 0;
       $('bossName').textContent = meta.name;
       $('bossUI').style.display = 'flex'; $('bossHpBar').style.width = '100%';
@@ -597,7 +611,8 @@
         spawnExplosion(x, y, '#facc15', 18); playSound('powerup'); triggerShake(6);
         return false;
       }
-      squad.count -= n; hurtFlash(); triggerShake(15); playSound('damage'); buzz('heavy');
+      squad.count -= n; hurtFlash(); triggerShake(reducedMotion ? 6 : 15); playSound('damage'); buzz('heavy');
+      if (squad.motion) squad.motion.hit = 0.14;
       if (squad.count <= 3 && !lastStandUsed && zoneTime > 3 && squad.count > 0) triggerLastStand();
       if (squad.count < 1) { gameOver(); return true; }
       return false;
@@ -953,6 +968,40 @@
       return false;
     }
 
+    // Asciero Argento: silver axe warden. Cast lane, overhead slam, leap. Death strip then the usual aura payout.
+    // The pure timing lives in js/axe-boss.js so tests can step it without the canvas.
+    function updateArgento(dt) {
+      const b = boss;
+      const out = AxeBoss.step(b, { dt, squadX: squad.x, level, squadCount: squad.count, shieldCharges });
+      b.y = trackProgress + 450;
+      if (out.sound === 'powerup') playSound('powerup');
+      if (out.sound === 'laser') { playSound('laser'); triggerShake(reducedMotion ? out.shake * 0.35 : out.shake); buzz('heavy'); }
+      if (out.shield) {
+        shieldCharges = Math.max(0, shieldCharges - 1);
+        addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15');
+        playSound('powerup');
+      } else if (out.label && (out.melee > 0 || out.drain > 0)) {
+        addFloatText(squad.x, trackProgress + 90, out.label, '#e2e8f0');
+      }
+      if (out.melee > 0) {
+        spawnExplosion(squad.x, trackProgress + 16, '#e2e8f0', 26, 1.2);
+        if (loseTroops(out.melee, squad.x, trackProgress)) return true;
+      } else if (out.drain > 0) {
+        squad.count -= out.drain; damageFlash = 0.12; dustSlow = Math.max(dustSlow, 0.45);
+        if (squad.motion) squad.motion.hit = Math.max(squad.motion.hit, 0.1);
+        if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+        if (squad.count < 1) { gameOver(); return true; }
+      }
+      if (out.victory) {
+        addAura(out.aura); playSound('powerup');
+        spawnExplosion(b.x, b.y, '#e2e8f0', reducedMotion ? 18 : 56);
+        triggerShake(reducedMotion ? 8 : 20); buzz('success'); victory();
+        return true;
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
     // Shared rolling orb / projectile logic for espresso cups, feathers, shells (and sweeper still has its own).
     function updateBossOrbs(dt, opt) {
       for (let i = entities.dust.length - 1; i >= 0; i--) {
@@ -981,13 +1030,17 @@
       }
 
       if (dustSlow > 0) dustSlow -= dt; if (dustBlind > 0) dustBlind -= dt;
-      squad.x += (squad.targetX - squad.x) * Math.min(1, (dustSlow > 0 ? 4 : 12) * dt);
+      // Body eases onto the steering target. Collision still reads squad.x.
+      if (!squad.motion) squad.motion = Motion.create();
+      Motion.step(squad.motion, squad.targetX, dt, { forward: baseSpeed, reduced: reducedMotion, dustSlow: dustSlow > 0, minX: -150, maxX: 150 });
+      squad.x = squad.motion.x;
       if (state === 'BOSS' && boss.active) {
         const ended = boss.kind === 'sweeper' ? updateSweeper(dt)
           : boss.kind === 'espresso' ? updateEspresso(dt)
           : boss.kind === 'flamenco' ? updateFlamenco(dt)
           : boss.kind === 'squalo' ? updateSqualo(dt)
           : boss.kind === 'yeti' ? updateYeti(dt)
+          : boss.kind === 'argento' ? updateArgento(dt)
           : updateGrump(dt);
         if (ended) return;
       }
@@ -1050,13 +1103,16 @@
           }
         }
         for (const d of entities.dust) { if (!hit && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 6) { d.hp -= b.dmg; hit = true; } }
-        if (state === 'BOSS' && boss.active && !hit && !boss.dying && Math.hypot(b.x - boss.x, b.y - boss.y) < (boss.kind === 'yeti' ? 95 : 80)) {
+        if (state === 'BOSS' && boss.active && !hit && !boss.dying && Math.hypot(b.x - boss.x, b.y - boss.y) < (boss.kind === 'yeti' ? 95 : boss.kind === 'argento' ? AxeBoss.HIT_R : 80)) {
           boss.hp -= b.dmg; boss.hitTime = 0.06; hit = true;
-          if (Math.random() < 0.35) spawnExplosion(b.x, b.y, '#38bdf8', 1, 0.35);
+          if (boss.kind === 'argento') AxeBoss.onHit(boss);
+          if (Math.random() < 0.35) spawnExplosion(b.x, b.y, boss.kind === 'argento' ? '#e2e8f0' : '#38bdf8', 1, 0.35);
           if (boss.hp <= 0) {
             if (boss.kind === 'yeti') {
               boss.hp = 0; boss.dying = true; boss.state = 'DYING'; boss.anim = 'defeat'; boss.animT = 0; boss.frame = 0;
               entities.dust.length = 0; playSound('damage'); triggerShake(12);
+            } else if (boss.kind === 'argento') {
+              AxeBoss.kill(boss); entities.dust.length = 0; playSound('damage'); triggerShake(reducedMotion ? 5 : 12);
             } else {
               boss.active = false; entities.dust.length = 0; addAura(5000 + (level - 1) * 1000); playSound('powerup');
               spawnExplosion(boss.x, boss.y, '#facc15', 60); triggerShake(20); buzz('success'); victory(); return;
@@ -1197,7 +1253,8 @@
       if (damageFlash > 0) damageFlash -= rawDt || 0.016;
 
       ctx.save();
-      if (screenShake > 0) ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+      const shakeAmt = reducedMotion ? screenShake * 0.2 : screenShake;
+      if (shakeAmt > 0.4) ctx.translate((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt);
       // Bottom-center origin, y UP the screen (toward horizon)
       ctx.translate(W / 2, H * 0.92); ctx.scale(VS, -VS);
 
@@ -1256,6 +1313,24 @@
             const p = project(boss.targetX, trackProgress + 10, 0);
             if (p) { ctx.fillStyle = 'rgba(148,163,184,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 90 * p.s, 28 * p.s, 0, 0, Math.PI * 2); ctx.fill();
               ctx.strokeStyle = 'rgba(226,232,240,0.95)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]); }
+          } else if (boss.kind === 'argento' && boss.state === 'CAST' && boss.lanes) {
+            const strike = boss.frame >= 7;
+            for (const lx of boss.lanes) {
+              const a = project(lx - AxeBoss.LANE_R, trackProgress + 18, 0), b2 = project(lx + AxeBoss.LANE_R, trackProgress + 18, 0);
+              const c = project(lx - AxeBoss.LANE_R * 0.55, boss.y, 0), d = project(lx + AxeBoss.LANE_R * 0.55, boss.y, 0);
+              if (!a || !b2 || !c || !d) continue;
+              ctx.fillStyle = strike ? 'rgba(186,230,253,0.8)' : 'rgba(125,211,252,0.42)';
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+              if (!strike) { ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = Math.max(2, 3 * a.s); ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]); }
+            }
+          } else if (boss.kind === 'argento' && (boss.state === 'OVERHEAD' || boss.state === 'LEAP') && boss.frame < 7) {
+            const p = project(boss.targetX, trackProgress + 12, 0);
+            if (p) {
+              const grow = 0.55 + Math.min(1, boss.frame / 6) * 0.45;
+              ctx.fillStyle = boss.state === 'LEAP' ? 'rgba(186,230,253,0.38)' : 'rgba(248,250,252,0.42)';
+              ctx.beginPath(); ctx.ellipse(p.x, p.y, AxeBoss.SLAM_R * grow * p.s, AxeBoss.SLAM_R * 0.36 * grow * p.s, 0, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = 'rgba(255,255,255,0.96)'; ctx.lineWidth = Math.max(2.5, 3.5 * p.s); ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]);
+            }
           } else if ((boss.kind === 'flamenco' || boss.kind === 'sweeper') && (boss.state === 'LUNGE' || boss.state === 'SWEEP')) {
             const p = project(boss.x, trackProgress + 10, 0);
             if (p) { ctx.fillStyle = boss.state === 'SWEEP' ? 'rgba(251,113,133,0.55)' : 'rgba(239,68,68,0.25)';
@@ -1308,13 +1383,21 @@
       if (boss && boss.active) {
         push(boss.y - trackProgress + CAM.back, () => {
           const p = project(boss.x, boss.y, 0); if (!p) return;
-          drawShadowP(ctx, p, boss.kind === 'squalo' ? 110 : 95);
+          const airShadow = boss.kind === 'argento' && boss.near > 0.5;
+          drawShadowP(ctx, p, boss.kind === 'squalo' ? 110 : airShadow ? 58 : boss.kind === 'argento' ? 100 : 95);
           ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, -1);
           if (boss.kind === 'yeti') {
             const sc = 0.95 * Math.min(1.35, p.s * 1.05);
             if (boss.hitTime > 0 && !boss.dying) { ctx.globalAlpha = 0.85; ctx.filter = 'brightness(2.2)'; }
             if (!Sprites.Yeti.draw(ctx, boss.anim || 'attack', boss.frame | 0, 0, 8, sc)) {
               Sprites.draw(ctx, 'yeti', 0, 0, 100, sc * 0.9);
+            }
+            ctx.filter = 'none'; ctx.globalAlpha = 1;
+          } else if (boss.kind === 'argento') {
+            const sc = 1.32 * Math.min(1.55, Math.max(p.s, 0.58) * 1.12);
+            if (boss.hitTime > 0 && !boss.dying) { ctx.globalAlpha = 0.88; ctx.filter = 'brightness(1.85)'; }
+            if (!Sprites.Argento.draw(ctx, boss.anim || 'idle', boss.frame | 0, 0, 6, sc)) {
+              Sprites.draw(ctx, 'argento', 0, 0, 110, sc * 0.9);
             }
             ctx.filter = 'none'; ctx.globalAlpha = 1;
           } else {
@@ -1383,16 +1466,21 @@
           const tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * 0.82;
           if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
           const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
+          const hurtPose = squad.motion && squad.motion.hit > 0;
+          const hasCycle = troopStage > 0; // rookie art is one pose; later stages have a real two-frame run
           // Sort slots so farther rows (negative oy in formation = behind) draw first
           const ordered = slots.map((s, i) => ({ s, i })).sort((a, b) => a.s[1] - b.s[1]);
           for (const { s: [ox, oy], i } of ordered) {
             // oy is negative for back rows in formation; in world, back rows are slightly behind squad
             const wy = trackProgress + oy * 0.85;
             const p = project(squad.drawX + ox, wy, 0); if (!p) continue;
-            const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 3 * p.s;
+            const pose = Motion.pose(squad.motion || Motion.create(), i, { hasCycle, reduced: reducedMotion });
             const sc = 0.82 * p.s;
-            ctx.save(); ctx.translate(p.x, p.y + bob); ctx.scale(1, -1);
-            Sprites.draw(ctx, tKey, flashOn ? 'hit' : (anim + i) & 1, 0, th * sc * 0.05, sc);
+            ctx.save();
+            ctx.translate(p.x, p.y + pose.bob * p.s);
+            ctx.scale(1, -1);
+            if (pose.lean) ctx.rotate(-pose.lean);
+            Sprites.draw(ctx, tKey, (flashOn || hurtPose) ? 'hit' : pose.frame, 0, th * sc * 0.05, sc);
             ctx.restore();
           }
           const label = `x${Math.max(0, Math.ceil(squad.count))}`;
@@ -1493,7 +1581,7 @@
     function offerDoubleSquad() {
       if (squadOfferShown || squad.count < 1 || !BRAds.canOffer(save.ads, 'squad')) return false;
       squadOfferShown = true; state = 'GATE'; dragging = false; Portal.gameplayStop();
-      $('gateDesc').textContent = `The Grump King is waiting. Your squad: x${Math.ceil(squad.count)}.`;
+      $('gateDesc').textContent = `${bossMeta(bossKind()).name} is waiting. Your squad: x${Math.ceil(squad.count)}.`;
       const box = $('gateOffer'); box.innerHTML = '';
       box.appendChild(adButton('squad', `DOUBLE SQUAD → x${Math.ceil(squad.count) + squadBonus()}`, () => {
         const add = squadBonus(); squad.count += add; addFloatText(squad.x, trackProgress + 100, `SQUAD x2! +${add}`, '#4ade80');
