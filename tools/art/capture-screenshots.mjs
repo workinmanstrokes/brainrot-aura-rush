@@ -63,7 +63,7 @@ await page.evaluate(() => {
     if (state !== 'PLAYING' && state !== 'BOSS') return;
     let tx = squad.targetX;
     if (state === 'BOSS' && boss) {
-      if (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') { const lanes = boss.lanes && boss.lanes.length ? boss.lanes : [boss.targetX]; let best = null, bd = -1; for (let x = -150; x <= 150; x += 10) { const d = Math.min(...lanes.map(l => Math.abs(l - x))); if (d >= 80 && (best === null || Math.abs(x - squad.x) < Math.abs(best - squad.x))) best = x; if (d > bd) bd = d; } tx = best !== null ? best : (boss.targetX > 0 ? -150 : 150); }
+      if (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'CAST' || boss.state === 'OVERHEAD' || boss.state === 'LEAP') { const lanes = boss.lanes && boss.lanes.length ? boss.lanes : [boss.targetX]; let best = null, bd = -1; for (let x = -150; x <= 150; x += 10) { const d = Math.min(...lanes.map(l => Math.abs(l - x))); if (d >= 80 && (best === null || Math.abs(x - squad.x) < Math.abs(best - squad.x))) best = x; if (d > bd) bd = d; } tx = best !== null ? best : (boss.targetX > 0 ? -150 : 150); }
       else tx = boss.x;
     } else {
       const g = entities.gates.find(g => g.active && g.y > trackProgress && g.y - trackProgress < 500);
