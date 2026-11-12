@@ -4,14 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "pwa:sw": "node scripts/gen-sw.mjs www aethersurgeapp"
+    "test": "node tests/unit.js",
+    "configure": "node scripts/configure.mjs",
+    "smoke": "node tests/smoke.mjs",
+    "portal:build": "node scripts/build-portal.mjs all --zip /workspace/out",
+    "pwa:sw": "node scripts/gen-sw.mjs www brainrot-aura-rush"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@capacitor-community/admob": "^8.2.1",
     "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.2",
