@@ -46,14 +46,18 @@
   // Mullet dude: Michael's own Grok Imagine art, cut from his reference sheet by tools/art/grok-cut.py into
   // www/assets/hero/*.png. Each evolution stage has 2 frames; the atlas is rebuilt once the images load.
   let atlas = null;
-  const HERO = {}, HERO_FR = { 1: ['mullet_base', 'mullet_base'], 2: ['mullet_run1', 'mullet_run2'], 3: ['mullet_caped', 'mullet_caped'], 4: ['mullet_armor', 'mullet_armor'] };
-  if (typeof Image !== 'undefined') for (const k of ['mullet_base', 'mullet_run1', 'mullet_run2', 'mullet_caped', 'mullet_armor']) { const im = new Image(); im.onload = () => { atlas = null; }; im.src = 'assets/hero/' + k + '.png'; HERO[k] = im; }
+  // Stage 1 is a single standing pose (no second drawing was cut). Stages 2–4 use the
+  // real two-frame runs already in assets/hero so the stride can plant instead of bobbing a statue.
+  const HERO = {}, HERO_FR = { 1: ['mullet_base', 'mullet_base'], 2: ['mullet_run1', 'mullet_run2'], 3: ['caped_run1', 'caped_run2'], 4: ['armor_run1', 'armor_run2'] };
+  if (typeof Image !== 'undefined') for (const k of ['mullet_base', 'mullet_run1', 'mullet_run2', 'caped_run1', 'caped_run2', 'armor_run1', 'armor_run2']) { const im = new Image(); im.onload = () => { atlas = null; }; im.src = 'assets/hero/' + k + '.png'; HERO[k] = im; }
   function drawHero(c, f, stage, W, H) {
-    const im = HERO[HERO_FR[stage][f ? 1 : 0]];
+    const pair = HERO_FR[stage] || HERO_FR[1];
+    const im = HERO[pair[f ? 1 : 0]];
     if (!im || !im.complete || !im.naturalWidth) { blob(c, 0, -H * 0.4, W * 0.3, H * 0.4, '#d4ff1e', 1.3); return; }
-    const k = Math.min(W / im.naturalWidth, H / im.naturalHeight), dw = im.naturalWidth * k, dh = im.naturalHeight * k, bob = (f && HERO_FR[stage][0] === HERO_FR[stage][1]) ? H * 0.03 : 0;
-    ell(c, 0, -0.5, dw * 0.32, 1.6); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill(); // ground shadow
-    c.drawImage(im, -dw / 2, -dh - bob, dw, dh);
+    // Height-fit keeps the feet on the origin across the two poses (no vertical pop).
+    const k = H / im.naturalHeight, dw = im.naturalWidth * k, dh = H;
+    ell(c, 0, -0.5, dw * 0.28, 1.6); c.fillStyle = 'rgba(0,0,0,0.35)'; c.fill();
+    c.drawImage(im, -dw / 2, -dh, dw, dh);
   }
   function drawWasher(c, f, P) {
       const b = f ? 1 : 0, SKIN = '#f6c7a1';
@@ -255,7 +259,204 @@
       shine(c, -40, -58, 18, 7, 0.55); shine(c, 44, 30, 6, 3, 0.25);
       c.restore();
     } },
+
+    // Boss 3 (restored): Espressorilla the Gorilla King — espresso machine gorilla. Frame 2 = steam rage.
+    espresso: { name: 'Espressorilla, the Gorilla King', role: 'Boss', w: 184, h: 192, frames: 3, draw(c, f) {
+      const angry = f === 2, up = f === 1 ? -5 : 0;
+      blob(c, -40, -8, 16, 8, '#3f2a1e'); blob(c, 40, -8, 16, 8, '#3f2a1e');   // feet
+      c.save(); c.translate(-58, -70 + up); c.rotate(0.25); blob(c, 0, 0, 16, 34, '#5b3a29'); blob(c, 0, 36, 15, 12, '#3f2a1e'); c.restore(); // arms
+      c.save(); c.translate(58, -70 - up); c.rotate(-0.25); blob(c, 0, 0, 16, 34, '#5b3a29'); blob(c, 0, 36, 15, 12, '#3f2a1e'); c.restore();
+      box(c, -50, -132, 100, 124, 18, '#dc2626', 2);                          // machine body
+      box(c, -54, -146, 108, 20, 8, '#e2e8f0', 2);                            // chrome top
+      for (let i = 0; i < 3; i++) { box(c, -36 + i * 26, -160, 20, 15, 5, ['#fef3c7', '#e0f2fe', '#fce7f3'][i], 1.4); } // cups on top
+      blob(c, 0, -152, 20, 10, '#5b3a29', 1.6);                               // gorilla brow tuft
+      box(c, -40, -122, 80, 52, 16, '#3f2a1e', 1.6);                          // gorilla face plate
+      box(c, -32, -116, 64, 30, 14, '#a8826b', 1.2);                          // muzzle-light area
+      const ir = angry ? '#ef4444' : '#1a1033';
+      eye(c, -16, -104, 9, 0, 0.3, angry ? 1 : 0.5, ir); eye(c, 16, -104, 9, 0, 0.3, angry ? 1 : 0.5, ir);
+      if (angry) { blob(c, -16, -101, 3.5, 3.5, '#fecaca', 0); blob(c, 16, -101, 3.5, 3.5, '#fecaca', 0); }
+      blob(c, -5, -88, 3, 2.2, '#1a1033', 0); blob(c, 5, -88, 3, 2.2, '#1a1033', 0); // nostrils
+      grin(c, 0, -80, 50, angry ? 9 : 6, 8, 1.6);
+      box(c, -38, -62, 76, 14, 6, '#cbd5e1', 1.6);                            // portafilter / group head
+      box(c, -6, -50, 12, 10, 3, '#94a3b8', 1.2);
+      box(c, -16, -36, 32, 24, 6, '#fef3c7', 1.6); box(c, -12, -34, 24, 6, 3, '#78350f', 0); // cup with espresso
+      blob(c, 38, -28, 8, 8, '#facc15', 1.4); blob(c, -38, -28, 8, 8, '#22d3ee', 1.4);   // dials
+      const st = f === 1 ? 6 : (angry ? 10 : 0);                                             // steam puffs
+      c.globalAlpha = 0.85;
+      blob(c, -50, -166 - st, 8, 6, '#f1f5f9', 1); blob(c, -58, -178 - st, 6, 5, '#f1f5f9', 1);
+      blob(c, 52, -164 + st * 0.5, 8, 6, '#f1f5f9', 1); blob(c, 60, -176 + st * 0.5, 6, 5, '#f1f5f9', 1);
+      if (angry) { blob(c, -20, -180, 10, 8, '#f8fafc', 1); blob(c, 18, -185, 9, 7, '#f8fafc', 1); }
+      c.globalAlpha = 1;
+      shine(c, -38, -126, 10, 4, 0.55); shine(c, -40, -142, 12, 3, 0.8, 0);
+    } },
+    // Boss 4 (restored): Flamenco Rotorina — pink flamingo with helicopter rotor hair, giant boss form.
+    flamenco: { name: 'Flamenco Rotorina', role: 'Boss', w: 160, h: 180, frames: 3, draw(c, f) {
+      const angry = f === 2, bob = f === 1 ? -6 : 0;
+      c.save(); c.translate(0, bob);
+      // long flamingo legs
+      c.lineWidth = 5; c.lineCap = 'round'; c.strokeStyle = OUT;
+      c.beginPath(); c.moveTo(-10, -8); c.lineTo(-14, -48); c.moveTo(12, -8); c.lineTo(16, -52); c.stroke();
+      c.lineWidth = 3.4; c.strokeStyle = '#be185d'; c.beginPath(); c.moveTo(-10, -8); c.lineTo(-14, -48); c.moveTo(12, -8); c.lineTo(16, -52); c.stroke();
+      blob(c, -14, -6, 8, 5, '#f9a8d4', 1.4); blob(c, 16, -6, 8, 5, '#f9a8d4', 1.4); // feet
+      // body
+      blob(c, 0, -72, 36, 28, '#f472b6', 2);
+      blob(c, -34, -78, 16, 12, '#ec4899', 1.6, -0.5); blob(c, 34, -78, 16, 12, '#ec4899', 1.6, 0.5); // wings
+      // neck + head
+      c.lineWidth = 14; c.strokeStyle = OUT; c.beginPath(); c.moveTo(10, -88); c.quadraticCurveTo(36, -110, 8, -128); c.stroke();
+      c.lineWidth = 10; c.strokeStyle = '#f9a8d4'; c.stroke();
+      blob(c, 4, -136, 22, 20, '#f472b6', 2);
+      c.beginPath(); c.moveTo(18, -136); c.quadraticCurveTo(44, -134, 38, -118); c.lineTo(20, -126); c.closePath();
+      c.fillStyle = glossFill(c, 30, -128, 14, 10, '#facc15'); c.fill(); c.lineWidth = 1.6; c.strokeStyle = OUT; c.stroke();
+      eye(c, -6, -142, 7, 0.3, -0.2, angry ? 1 : 0.3, angry ? '#ef4444' : '#1a1033');
+      eye(c, 12, -144, 5.5, 0.3, -0.2, angry ? 1 : 0.3, angry ? '#ef4444' : '#1a1033');
+      grin(c, 2, -126, 18, angry ? 5 : 3.2, 5, 1.2);
+      // rotor mast + spinning blades (frame 2 spins faster look)
+      box(c, -2, -168, 8, 14, 2, '#64748b', 1.2);
+      const a = f === 2 ? 0.9 : (f ? 0.45 : 0);
+      c.save(); c.translate(2, -168); c.scale(1, 0.38);
+      for (let i = 0; i < 2; i++) {
+        c.save(); c.rotate(a + i * Math.PI / 2);
+        rr(c, -56, -5, 112, 10, 4); c.fillStyle = angry ? 'rgba(248,113,113,0.95)' : 'rgba(203,213,225,0.95)'; c.fill();
+        c.lineWidth = 3; c.strokeStyle = OUT; c.stroke();
+        c.restore();
+      }
+      c.restore();
+      blob(c, 2, -168, 5, 4, '#facc15', 1);
+      // motion streaks when angry
+      if (angry) {
+        c.globalAlpha = 0.55; c.strokeStyle = '#fda4af'; c.lineWidth = 3;
+        for (let k = 0; k < 4; k++) { c.beginPath(); c.moveTo(-70 + k * 8, -150 - k * 4); c.lineTo(-40 + k * 8, -150 - k * 4); c.stroke(); }
+        c.globalAlpha = 1;
+      }
+      shine(c, -16, -84, 10, 4, 0.55);
+      c.restore();
+    } },
+    // Boss 5: Squalo Supremo — giant shark-tank warboss. Frame 2 = jaws open / cannon hot.
+    squaloBoss: { name: 'Squalo Supremo', role: 'Boss', w: 200, h: 150, frames: 3, draw(c, f) {
+      const angry = f === 2, kick = f === 1 ? 3 : 0;
+      // huge treads
+      box(c, -78, -28, 156, 28, 12, '#334155', 2.2);
+      for (let i = 0; i < 8; i++) blob(c, -64 + i * 18 + kick, -14, 7, 7, '#94a3b8', 1.2);
+      // dorsal fin
+      c.beginPath(); c.moveTo(-10, -90); c.quadraticCurveTo(8, -140, 28, -92); c.closePath();
+      c.fillStyle = glossFill(c, 8, -110, 16, 20, '#0e7490'); c.fill(); c.lineWidth = 2; c.strokeStyle = OUT; c.stroke();
+      // shark head body
+      blob(c, 0, -70, 70, 42, '#0e7490', 2.2);
+      c.save(); ell(c, 0, -70, 70, 42); c.clip(); ell(c, 0, -42, 58, 24); c.fillStyle = mix('#e0f2fe', 0); c.fill(); c.restore();
+      ell(c, 0, -70, 70, 42); c.lineWidth = 2.2; c.strokeStyle = OUT; c.stroke();
+      // jaw
+      const jawY = angry ? -8 : 0;
+      c.beginPath(); c.moveTo(-46, -56 + jawY); c.quadraticCurveTo(0, -30 + jawY, 46, -56 + jawY); c.quadraticCurveTo(0, -10 + jawY * 0.5, -46, -56 + jawY); c.closePath();
+      c.fillStyle = '#5b0f2e'; c.fill();
+      fangs(c, 0, -54 + jawY, 80, 9, 10, false); fangs(c, 0, -28 + jawY, 60, 8, 8, true);
+      c.lineWidth = 1.6; c.strokeStyle = OUT; c.stroke();
+      // dual cannons in the jaws
+      box(c, -22, -48 + jawY - (angry ? 2 : 0), 16, 22, 3, '#1e293b', 1.4);
+      box(c, 6, -48 + jawY - (angry ? 2 : 0), 16, 22, 3, '#1e293b', 1.4);
+      blob(c, -14, -28 + jawY, 5, 3, angry ? '#ef4444' : '#0f172a', 1);
+      blob(c, 14, -28 + jawY, 5, 3, angry ? '#ef4444' : '#0f172a', 1);
+      eye(c, -32, -88, 12, 0.25, 0.2, 1, angry ? '#ef4444' : '#991b1b');
+      eye(c, 32, -88, 12, -0.25, 0.2, 1, angry ? '#ef4444' : '#991b1b');
+      if (angry) { blob(c, -32, -84, 4, 4, '#fecaca', 0); blob(c, 32, -84, 4, 4, '#fecaca', 0); }
+      for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(54 - i * 5, -86 + i); c.lineTo(58 - i * 5, -70); c.lineWidth = 1.4; c.strokeStyle = 'rgba(26,16,51,0.55)'; c.stroke(); }
+      // turret crown
+      box(c, -18, -118, 36, 16, 5, '#475569', 1.6); blob(c, 0, -126, 8, 6, '#facc15', 1.2);
+      shine(c, -28, -100, 14, 5, 0.55);
+    } },
+
+    // Boss 6: Yeti Scudiero — Michael's provided 3D yeti knight (image frames in assets/yeti/).
+    // Atlas only keeps a soft placeholder; runtime drawing uses Sprites.Yeti.draw with the real art.
+    yeti: { name: 'Yeti Scudiero', role: 'Boss', w: 120, h: 140, frames: 2, draw(c, f) {
+      if (YETI.drawTo(c, 'attack', 0, 0, 0, 120 / 384)) return;
+      // images not ready yet (unit tests / first paint): soft silhouette so atlas build never crashes
+      blob(c, 0, -70, 36, 55, '#e8eef7', 1.5); blob(c, 0, -118, 22, 22, '#f8fafc', 1.2);
+    } },
+    // Boss 7: Asciero Argento — Michael's silver axe warden. Runtime uses Sprites.Argento.
+    argento: { name: 'Asciero Argento, the Silver Warden', role: 'Boss', w: 136, h: 150, frames: 2, draw(c, f) {
+      if (ARGENTO.drawTo(c, 'idle', 0, 0, 0, 136 / 384)) return;
+      blob(c, 0, -72, 40, 58, '#cbd5e1', 1.5); blob(c, 0, -124, 24, 22, '#f8fafc', 1.2);
+    } },
   };
+
+
+  // ---------- Yeti Scudiero (Michael's sprite strips) ----------
+  // 10-frame strips: attack (flash + shove), overhead smash, ice/lightning cast, defeat.
+  // No walk/spin strips were provided — idle is always frame 0 of a strip.
+  const YETI = (() => {
+    const anims = { attack: [], overhead: [], cast: [], defeat: [] };
+    let ready = 0, total = 40; // 4 strips × 10 frames (Michael's art under assets/yeti/)
+    if (typeof Image !== 'undefined') {
+      for (const [anim, n] of [['attack', 10], ['overhead', 10], ['cast', 10], ['defeat', 10]]) {
+        for (let i = 0; i < n; i++) {
+          const im = new Image();
+          im.onload = () => { ready++; atlas = null; };
+          im.src = `assets/yeti/${anim}_${i}.png`;
+          anims[anim][i] = im;
+        }
+      }
+    } else {
+      for (const anim of Object.keys(anims)) for (let i = 0; i < 10; i++) anims[anim][i] = null;
+    }
+    function frame(anim, i) {
+      const list = anims[anim] || anims.attack;
+      const im = list[Math.max(0, Math.min(list.length - 1, i | 0))];
+      return im && im.complete && im.naturalWidth ? im : null;
+    }
+    /** Draw into a CAST-style local context (origin at feet, y up negative). */
+    function drawTo(c, anim, i, x, y, worldW) {
+      const im = frame(anim, i); if (!im) return false;
+      const k = worldW / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      c.drawImage(im, x - dw / 2, y - dh, dw, dh);
+      return true;
+    }
+    /** Draw in game render coords: feet at (x, footY) in the already y-flipped sprite pass (same as Sprites.draw). */
+    function draw(ctx, anim, i, x, footY, scale = 1) {
+      const im = frame(anim, i); if (!im) return false;
+      const w = 120 * scale, k = w / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      ctx.drawImage(im, x - dw / 2, footY - dh, dw, dh);
+      return true;
+    }
+    return { anims, frame, draw, drawTo, ready: () => ready >= total && total > 0, count: () => total };
+  })();
+
+  // ---------- Asciero Argento (Michael's axe-warden strips) ----------
+  // 10-frame strips under assets/argento/. No spin strip was provided.
+  const ARGENTO = (() => {
+    const names = ['idle', 'run', 'hurt', 'death', 'overhead', 'leap', 'cast'];
+    const anims = {};
+    let ready = 0, total = names.length * 10;
+    if (typeof Image !== 'undefined') {
+      for (const anim of names) {
+        anims[anim] = [];
+        for (let i = 0; i < 10; i++) {
+          const im = new Image();
+          im.onload = () => { ready++; atlas = null; };
+          im.src = `assets/argento/${anim}_${i}.png`;
+          anims[anim][i] = im;
+        }
+      }
+    } else {
+      for (const anim of names) { anims[anim] = []; for (let i = 0; i < 10; i++) anims[anim][i] = null; }
+    }
+    function frame(anim, i) {
+      const list = anims[anim] || anims.idle;
+      const im = list[Math.max(0, Math.min(list.length - 1, i | 0))];
+      return im && im.complete && im.naturalWidth ? im : null;
+    }
+    function drawTo(c, anim, i, x, y, worldW) {
+      const im = frame(anim, i); if (!im) return false;
+      const k = worldW / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      c.drawImage(im, x - dw / 2, y - dh, dw, dh);
+      return true;
+    }
+    function draw(ctx, anim, i, x, footY, scale = 1) {
+      const im = frame(anim, i); if (!im) return false;
+      const w = 136 * scale, k = w / im.naturalWidth, dw = im.naturalWidth * k, dh = im.naturalHeight * k;
+      ctx.drawImage(im, x - dw / 2, footY - dh, dw, dh);
+      return true;
+    }
+    return { anims, frame, draw, drawTo, ready: () => ready >= total && total > 0, count: () => total };
+  })();
 
   // ---------- Atlas ----------
   const TROOP_PX = 4; // squad troopers draw at ~4 px/unit on a 3.5x phone (1.15 scale), bake them sharper
@@ -263,7 +464,7 @@
   const frames = {};
   function build() {
     const doc = root.document; if (!doc) return;
-    const pad = 4; let x = 0, y = 0, rowH = 0; const maxW = 1400, place = [];
+    const pad = 4; let x = 0, y = 0, rowH = 0; const maxW = 1800, place = [];
     for (const key in CAST) {
       const s = CAST[key], px = (key === 'boss' || key === 'sweeper') ? 2 : EVOLVE.some(e => e.key === key) ? TROOP_PX : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
       const list = [...Array(s.frames).keys(), 'hit'];
@@ -288,5 +489,5 @@
     const s = CAST[key], w = (s.w + f.pad * 2) * scale, h = (s.h + f.pad * 2) * scale;
     ctx.drawImage(atlas, f.sx, f.sy, f.sw, f.sh, x - w / 2, y - h + f.pad * scale, w, h);
   }
-  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas };
+  root.Sprites = { CAST, EVOLVE, stageFor, draw, build, atlas: () => atlas, Yeti: YETI, Argento: ARGENTO };
 })(typeof window !== 'undefined' ? window : globalThis);
