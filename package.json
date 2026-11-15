@@ -7,7 +7,8 @@
     "test": "node tests/unit.js",
     "configure": "node scripts/configure.mjs",
     "smoke": "node tests/smoke.mjs",
-    "portal:build": "node scripts/build-portal.mjs all --zip /workspace/out"
+    "portal:build": "node scripts/build-portal.mjs all --zip /workspace/out",
+    "pwa:sw": "node scripts/gen-sw.mjs www brainrot-aura-rush"
   },
   "keywords": [],
   "author": "",
