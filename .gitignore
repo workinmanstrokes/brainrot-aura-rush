@@ -1,6 +1,7 @@
 node_modules/
 android/local.properties
 android/keystore.properties
+android/admob.properties
 android/app/release
 android/build/
 android/app/build/
@@ -11,3 +12,4 @@ keystore/*.jks
 keystore/*.keystore
 .DS_Store
 *.log
+dist/

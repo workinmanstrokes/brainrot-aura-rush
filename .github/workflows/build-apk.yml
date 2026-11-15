@@ -1,45 +1,128 @@
 name: Build Android APK
 
+# - pull requests / pushes to master: unit tests + debug APK (Google TEST ads only; fails if real ad ids leak in).
+# - workflow_dispatch: also builds a SIGNED release .aab.
+# Secrets (Settings > Secrets and variables > Actions):
+#   ADMOB_APP_ID, ADMOB_REWARDED_ID   real AdMob ids, used ONLY by the release AAB (configure.mjs --release)
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD   upload key (release only)
+
 on:
   push:
     branches: [ master, main ]
+  pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  debug-apk:
     runs-on: ubuntu-latest
+    env:
+      ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+      ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_ID }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: gradle }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Install
+        run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Release ad config check (dry run, nothing written)
+        run: node scripts/configure.mjs --release --dry-run
+      - name: Configure debug build (TEST ads) and sync Capacitor
         run: |
-          npm install
+          node scripts/configure.mjs
+          grep -q "testing: true" www/js/config.js && grep -q "3940256099942544/5224354917" www/js/config.js || { echo "::error::debug build must use TEST ad units"; exit 1; }
+          test ! -f android/admob.properties || { echo "::error::debug build must not carry a real AdMob App ID"; exit 1; }
           npx cap sync android
-
-      - name: Grant Execute Permission to Gradle
+      - name: Build debug APK
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
-
-      - name: Build Debug APK
-        run: |
-          cd android
           ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Check debug APK (TEST app id, sdk levels, 64-bit)
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|native-code)" || true
+          "$AAPT" dump xmltree --file AndroidManifest.xml "$APK" | grep -A2 "gms.ads.APPLICATION_ID" | grep -q "3940256099942544" || { echo "::error::debug APK carries a non-TEST AdMob App ID"; exit 1; }
+          if [ -n "$ADMOB_REWARDED_ID" ] && unzip -p "$APK" assets/public/js/config.js | grep -qF "$ADMOB_REWARDED_ID"; then echo "::error::debug APK carries the real rewarded unit"; exit 1; fi
+          if unzip -l "$APK" | grep -q " lib/armeabi-v7a/" && ! unzip -l "$APK" | grep -q " lib/arm64-v8a/"; then echo "::error::32-bit only native libs"; exit 1; fi
+      - name: Publish APK to rolling <branch>-latest prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')-latest"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/BrainrotAuraRush-debug.apk"
+          notes="Latest build of $BRANCH from $SHA (run $GITHUB_RUN_ID)."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$notes" --prerelease
+          else
+            gh release create "$TAG" --target "$SHA" --title "$BRANCH (latest build)" --notes "$notes" --prerelease
+          fi
+          gh release upload "$TAG" "$RUNNER_TEMP/BrainrotAuraRush-debug.apk" --clobber
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+  release-aab:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+      ADMOB_REWARDED_ID: ${{ secrets.ADMOB_REWARDED_ID }}
+      KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: gradle }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Check secrets are present
+        run: |
+          missing=0
+          for v in KS_B64 KS_PASS KEY_ALIAS KEY_PASS ADMOB_APP_ID ADMOB_REWARDED_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Missing secret ($v)"; missing=1; fi
+          done
+          exit $missing
+      - name: Install, configure (real ads), sync
+        run: |
+          npm ci
+          node scripts/configure.mjs --release
+          npx cap sync android
+      - name: Write keystore.properties
+        run: |
+          KS_PATH="$RUNNER_TEMP/upload.keystore"
+          echo "$KS_B64" | base64 --decode > "$KS_PATH"
+          { echo "storeFile=$KS_PATH"; echo "storePassword=$KS_PASS"; echo "keyAlias=$KEY_ALIAS"; echo "keyPassword=$KEY_PASS"; } > android/keystore.properties
+      - name: Build signed release bundle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease --no-daemon --stacktrace
+      - name: Verify signature
+        run: |
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verify "$AAB" | tee /tmp/verify.txt; grep -q "jar verified" /tmp/verify.txt
+          if keytool -printcert -jarfile "$AAB" | grep -q "CN=Android Debug"; then echo "::error::debug-signed"; exit 1; fi
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/keystore.properties "$RUNNER_TEMP/upload.keystore" android/admob.properties
+      - uses: actions/upload-artifact@v4
         with:
-          name: BrainrotAuraRush-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: BrainrotAuraRush-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 2

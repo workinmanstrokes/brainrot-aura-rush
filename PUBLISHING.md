@@ -20,8 +20,8 @@
   `@capacitor/app` (Android back button: pause / resume / back to title / exit), `@capacitor/haptics` (hits, laser,
   good gates, boss kill; toggle in the pause menu), `@capacitor/status-bar` (hidden for full-screen play),
   `@capacitor/splash-screen`.
-- **No ads, no analytics.** The AdMob plugin and Google's test AdMob App ID were removed. No native `.so` libraries
-  are bundled, so the build is fully 64-bit compatible.
+- **Opt-in rewarded ads (AdMob + UMP), no analytics.** See step 3. No native `.so` libraries are bundled, so the
+  build is fully 64-bit compatible.
 
 ## Before you publish — required steps
 
@@ -41,21 +41,36 @@ Create a **new upload keystore for this app** (don't reuse the Aether Surge key)
 ```
 keytool -genkeypair -v -keystore keystore/brainrot-upload.jks -alias brainrot -keyalg RSA -keysize 2048 -validity 10000
 ```
+**Done (Oct 17, 2026):** upload key `brainrotaurarush.jks` (alias `brainrotaurarush`, CN=Diddlerrr) was generated
+on Launchpad's build box; Michael keeps the backup zip. Upload cert SHA-256:
+`AF:C0:8C:B5:15:82:AF:B0:9C:6E:AD:7F:51:A7:12:56:8E:66:57:F1:3F:03:3E:FB:E1:DC:AC:DF:46:3E:72:36`.
+
 Then create `android/keystore.properties` (git-ignored) with `storeFile`, `storePassword`, `keyAlias`, `keyPassword`
 — `android/app/build.gradle` picks it up automatically. **Back the keystore and passwords up somewhere safe**; if you
 lose them you cannot update the app. Keystores and `keystore.properties` are git-ignored — keep it that way.
 
-### 3. Ads (optional, later)
-The game ships without ads. To monetize later: create the app in AdMob, then re-add `@capacitor-community/admob`,
-put the real App ID in `AndroidManifest.xml` (`com.google.android.gms.ads.APPLICATION_ID`), call the plugin from
-`www/index.html`, and update the privacy policy's Advertising section and the Play Data safety form.
+### 3. Ads (rewarded only, opt-in)
+AdMob rewarded ads via `@capacitor-community/admob` with Google UMP consent (Privacy options button on the title screen
+when required) and max ad content rating T. No interstitials, no banners. Android only; web/iOS are a no-op
+(`?adsim=1` simulates ads in a browser for testing). Placements, all optional buttons with caps, plus 20 ads/day overall:
+- **Revive** after a wipe-out: once per run (+12 or more troopers, clears nearby enemies, 1 shield).
+- **Double Essence** on the game-over screen: once per run end.
+- **Bonus aura** on a zone clear: +50% of the zone's aura (min 250), once per zone.
+- **Daily chest reroll** on the title screen: once per day, keeps the better roll (the chest itself is free).
+
+`www/js/config.js` ships Google's TEST ids. `node scripts/configure.mjs --release` with the `ADMOB_APP_ID` +
+`ADMOB_REWARDED_ID` env vars/secrets writes the real rewarded unit into config.js and the real App ID into the
+git-ignored `android/admob.properties`; any non-release run puts the TEST ids back. CI fails if a debug APK carries real
+ids. **A release AAB built without those secrets carries TEST ids and must not ship.**
 
 ### 4. Host the privacy policy
-`privacy-policy.html` is complete (Diddlerrr, mscofield1588@gmail.com, ages 13+, no ads). Host it publicly
-(e.g. GitHub Pages) and use the URL in Play Console.
+`privacy-policy.html` is complete (Diddlerrr, mscofield1588@gmail.com, ages 13+, AdMob rewarded ads + UMP). It is hosted at
+https://workinmanstrokes.github.io/test-builds/privacy/brainrot-aura-rush.html: use that URL in Play Console.
+(The game has Privacy policy link is on the title screen.)
 
 ### 5. Build the release
 ```
+ADMOB_APP_ID=... ADMOB_REWARDED_ID=... node scripts/configure.mjs --release
 npx cap sync android
 cd android
 ./gradlew bundleRelease
@@ -67,7 +82,7 @@ Output: `android/app/build/outputs/bundle/release/app-release.aab`.
 2. Store listing: descriptions, screenshots, feature graphic, 512x512 icon.
 3. Content rating questionnaire.
 4. Target audience and content — must match the privacy policy's children's statement.
-5. Data safety form — no data collected or shared.
+5. Data safety form: AdMob collects/shares Device or other IDs (advertising ID), approximate location (IP), app interactions and diagnostics for advertising, analytics and fraud prevention; encrypted in transit; Contains ads: Yes.
 6. Privacy policy URL.
 7. Ads declaration: No.
 8. Upload `app-release.aab` (start with Internal testing), then submit for review.

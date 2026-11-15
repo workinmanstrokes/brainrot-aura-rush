@@ -14,7 +14,9 @@
   <script src="ios.js"></script>
   <!-- /ios-pwa -->
   <title>Brainrot: Tactical Aura Rush</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <style>
     @font-face { font-family: 'GameFont'; src: url('fonts/ArchivoBlack-Regular.ttf') format('truetype'); font-display: swap; }
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
@@ -24,10 +26,10 @@
     #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
 
     .top-bar { position: absolute; top: max(env(safe-area-inset-top, 0px), 14px); left: 12px; right: 12px; display: flex; flex-direction: column; gap: 10px; }
-    .stats-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #fff; font-size: 14px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+    .stats-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #fff; font-size: 17px; letter-spacing: .5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
     .right-group { display: flex; align-items: center; gap: 8px; }
-    .badge { background: rgba(15, 23, 42, 0.92); padding: 7px 14px; border-radius: 20px; border: 2px solid #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-    .icon-btn { pointer-events: auto; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #94a3b8; background: rgba(15,23,42,0.92); color: #fff; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: sans-serif; }
+    .badge { background: rgba(15, 23, 42, 0.95); padding: 0 16px; min-height: 44px; border-radius: 20px; border: 2px solid #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .icon-btn { pointer-events: auto; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #94a3b8; background: rgba(15,23,42,0.92); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: sans-serif; }
     .icon-btn:active { transform: scale(0.92); }
 
     .progress-container { width: 100%; height: 12px; background: rgba(15,23,42,0.9); border: 2px solid #334155; border-radius: 8px; overflow: hidden; position: relative; }
@@ -64,6 +66,13 @@
     #metaList { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px; }
     .essence { font-size: 14px; color: #c4b5fd; margin: -6px 0 14px; font-family: 'Roboto', Arial, sans-serif; font-weight: bold; }
     .btn.violet { background: linear-gradient(180deg, #a78bfa 0%, #6d28d9 100%); border-color: #ddd6fe; color: #fff; box-shadow: 0 8px 20px rgba(139, 92, 246, 0.45); margin-top: 10px; font-size: 16px; padding: 11px 20px; }
+    .btn.ad { background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%); border-color: #bbf7d0; color: #052e16; box-shadow: 0 8px 20px rgba(74, 222, 128, 0.35); font-size: 15px; padding: 11px 16px; margin-bottom: 10px; }
+    .btn.ad:disabled { opacity: 0.5; }
+    .btn.chest { background: linear-gradient(180deg, #f472b6 0%, #be185d 100%); border-color: #fbcfe8; color: #fff; box-shadow: 0 8px 20px rgba(236, 72, 153, 0.4); margin-top: 10px; font-size: 16px; padding: 11px 20px; }
+    #chestBox p { margin: 10px 0 0; font-size: 13px; color: #f9a8d4; }
+    #chestBox .btn.ad { margin: 8px 0 0; }
+    .legal { margin-top: 14px; display: flex; justify-content: center; gap: 14px; align-items: center; font-family: 'Roboto', Arial, sans-serif; font-size: 12px; }
+    .legal a, .legal button { color: #94a3b8; background: none; border: none; text-decoration: underline; font: inherit; cursor: pointer; pointer-events: auto; }
     #hint { position: absolute; top: 58%; left: 50%; transform: translateX(-50%); color: #fff; font-size: 16px; letter-spacing: 2px; animation: pulse 1s infinite alternate; text-shadow: 0 2px 4px #000; white-space: nowrap; }
     @keyframes pulse { from { opacity: 0.55; } to { opacity: 1; } }
 
@@ -75,6 +84,7 @@
     #damageOverlay { position: absolute; inset: 0; background: radial-gradient(circle, transparent 40%, rgba(239,68,68,0.45) 100%); opacity: 0; pointer-events: none; }
     #slowmoOverlay { position: absolute; inset: 0; box-shadow: inset 0 0 100px rgba(56,189,248,0.35); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
   </style>
+  <script src="telemetry.js" defer></script>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
@@ -95,7 +105,7 @@
     </div>
 
     <div id="bossUI">
-      <span>GORILLA KING</span>
+      <span id="bossName">TESTONE BAFFOLINI</span>
       <div class="boss-hp-container"><div class="boss-hp-fill" id="bossHpBar"></div></div>
     </div>
 
@@ -106,11 +116,14 @@
   <div id="startModal" class="modal">
     <div class="card">
       <h1 style="color:#facc15; text-shadow:0 4px 0 #a16207;">TACTICAL RUSH</h1>
-      <p>Pick the right gates to grow your squad.<br>Dodge the Gorilla King's red laser.<br>Spend aura on upgrades between zones!</p>
+      <p>Steer from behind your squad in 3rd person.<br>Hit the right gates & ability checkpoints.<br>Dodge bosses and spend aura between zones!</p>
       <p class="best" id="startBest"></p>
       <p class="essence" id="essenceP"></p>
       <button class="btn gold" onclick="startGame()">TAP TO START</button>
       <button class="btn violet" id="metaBtn" onclick="openMetaShop()">⬡ UPGRADES</button>
+      <div class="abx-menu"><button class="btn abx-pink" id="boxBtn" onclick="AuraBox.open()">🎁 AURA BOX</button><button class="btn abx-dim" id="indexBtn" onclick="AuraBox.openIndex()">📖 INDEX</button></div>
+      <div id="chestBox"></div>
+      <div class="legal"><a id="privacyLink" href="#" target="_blank" rel="noopener">Privacy policy</a><button id="privOptBtn" style="display:none" onclick="BRAds.showPrivacyOptions()">Privacy options</button></div>
     </div>
   </div>
 
@@ -120,6 +133,8 @@
       <p id="endDesc">Boss Defeated!</p>
       <p class="best" id="endBest"></p>
       <div id="shop"></div>
+      <div id="boxOffer"></div>
+      <div id="adOffers"></div>
       <button class="btn" id="nextBtn" onclick="nextLevel()">CONTINUE</button>
     </div>
   </div>
@@ -130,6 +145,15 @@
       <p class="essence" id="metaEssence" style="margin:0 0 12px"></p>
       <div id="metaList"></div>
       <button class="btn" onclick="closeMetaShop()">BACK</button>
+    </div>
+  </div>
+
+  <div id="gateModal" class="modal" style="display:none;">
+    <div class="card" style="border-color:#facc15">
+      <h1 style="color:#facc15;text-shadow:0 4px 0 #a16207">BOSS GATE AHEAD</h1>
+      <p id="gateDesc">The Grump King is waiting.</p>
+      <div id="gateOffer"></div>
+      <button class="btn gold" id="gateFight" onclick="enterBoss()">FIGHT NOW</button>
     </div>
   </div>
 
@@ -144,6 +168,13 @@
     </div>
   </div>
 
+  <script src="js/config.js"></script>
+  <script src="js/portal.js"></script>
+  <script src="js/ads.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/motion.js"></script>
+  <script src="js/axe-boss.js"></script>
+  <script src="js/aurabox.js"></script>
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -187,11 +218,20 @@
     }
     window.addEventListener('resize', resize);
     resize();
+    // Decorative motion only. Steering, hitboxes and attack telegraphs stay on either way.
+    let reducedMotion = false;
+    try {
+      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+      const applyRM = () => { reducedMotion = !!mq.matches; };
+      applyRM();
+      if (mq.addEventListener) mq.addEventListener('change', applyRM);
+    } catch (e) { /* matchMedia missing */ }
 
     // ----- Persistence -----
     const SAVE_KEY = 'brainrot-aura-rush-v1';
-    let save = { bestAura: 0, bestZone: 0, muted: false, vibe: true };
+    let save = { bestAura: 0, bestZone: 0, muted: false, vibe: true, ads: { day: '', count: 0, chest: 0 }, chestDay: '', chestAmt: 0 };
     try { save = Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* storage unavailable */ }
+    if (!save.ads || typeof save.ads !== 'object') save.ads = { day: '', count: 0, chest: 0 };
     function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } }
     function recordBest() {
       save.bestAura = Math.max(save.bestAura, Math.round(aura));
@@ -300,9 +340,12 @@
     // ----- Game state -----
     let state = 'START', pausedFrom = null;
     let runKills = 0, runAuraEarned = 0, runAwarded = true; // Essence inputs for the current run
+    let troopStage = 0, evolveFlash = 0; // squad evolution stage (Sprites.EVOLVE, from aura earned this run) + flash timer
     let level = 1, aura = 0, trackProgress = 0, trackLength = 6000, baseSpeed = 240, screenShake = 0;
     let timeScale = 1.0, slowMoTimer = 0, zoneTime = 0, lastStandUsed = false, damageFlash = 0;
     let shieldCharges = 0, carrySquad = 0, zoneAuraStart = 0;
+    // Rewarded-ad caps: one revive per run, one Essence double per run end, one aura bonus per zone clear.
+    let runRevived = false, runDoubled = false, zoneBonusUsed = false, deathState = 'PLAYING', lastGained = 0;
     const ZONE_COLORS = { train: [19, 33, 66], industrial: [74, 29, 10], arena: [59, 7, 100] };
     let bgColor = ZONE_COLORS.train.slice();
 
@@ -315,9 +358,28 @@
     let upgrades = { recruits: 0, rate: 0, dmg: 0, shield: 0 };
     const upgradeCost = k => Math.round(UPGRADES[k].base * Math.pow(1.6, upgrades[k]) / 50) * 50;
 
-    const squad = { x: 0, targetX: 0, drawX: 0, count: 8, visualCount: 8, formation: 'GRID', fireRate: 4.5, fireRange: 550, shootTimer: 0 };
-    const entities = { bullets: [], gates: [], enemies: [], particles: [], texts: [] };
+    const squad = { x: 0, targetX: 0, drawX: 0, count: 8, visualCount: 8, formation: 'GRID', fireRate: 4.5, fireRange: 550, shootTimer: 0, motion: Motion.create() };
+    const entities = { bullets: [], gates: [], enemies: [], particles: [], texts: [], dust: [] };
     let boss = null;
+    let dustBlind = 0, dustSlow = 0; // Dust Bawl hit: brief haze over the screen + sluggish steering
+    // Boss roster (cycles by zone). Restored cut cast: Espressorilla, Flamenco Rotorina, Squalo Supremo + the two live bosses.
+    // ?boss=grump|sweeper|espresso|flamenco|squalo|yeti|argento forces one for testing
+    // and shortens the zone so the fight is a few seconds away.
+    const BOSS_ROSTER = [
+      { kind: 'grump',     sprite: 'boss',       name: 'TESTONE BAFFOLINI',      shout: 'GRUMP KING!',          hpMul: 1 },
+      { kind: 'sweeper',   sprite: 'sweeper',    name: 'THE SWEEPING OLD MAN',   shout: 'DUST BAWL INCOMING!',  hpMul: 0.9 },
+      { kind: 'espresso',  sprite: 'espresso',   name: 'ESPRESSORILLA',          shout: 'STEAM PRESSURE!',      hpMul: 1.05 },
+      { kind: 'flamenco',  sprite: 'flamenco',   name: 'FLAMENCO ROTORINA',      shout: 'ROTOR RUSH!',          hpMul: 0.95 },
+      { kind: 'squalo',    sprite: 'squaloBoss', name: 'SQUALO SUPREMO',         shout: 'CANNON BARRAGE!',      hpMul: 1.1 },
+      { kind: 'yeti',      sprite: 'yeti',       name: 'YETI SCUDIERO',          shout: 'FROST AXE FALLS!',     hpMul: 1.15 },
+      { kind: 'argento',   sprite: 'argento',    name: 'ASCIERO ARGENTO',        shout: 'SILVER AXE!',          hpMul: 1.2 },
+    ];
+    const BOSS_FORCE = (new URLSearchParams(location.search).get('boss') || '').toLowerCase();
+    const bossMeta = (kind) => BOSS_ROSTER.find(b => b.kind === kind) || BOSS_ROSTER[0];
+    const bossKind = () => {
+      if (BOSS_FORCE && BOSS_ROSTER.some(b => b.kind === BOSS_FORCE)) return BOSS_FORCE;
+      return BOSS_ROSTER[(Math.max(1, level) - 1) % BOSS_ROSTER.length].kind;
+    };
 
     // Difficulty knobs per zone
     // Hits cost a flat amount early on and a share of the squad later, so big squads still feel pressure.
@@ -356,13 +418,28 @@
     }
     window.addEventListener('mousedown', onPointerDown); window.addEventListener('mousemove', onPointerMove); window.addEventListener('mouseup', onPointerUp);
     window.addEventListener('touchstart', onPointerDown, { passive: true }); window.addEventListener('touchmove', onPointerMove, { passive: true }); window.addEventListener('touchend', onPointerUp); window.addEventListener('touchcancel', onPointerUp);
-    window.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'p') { state === 'PAUSED' ? resumeGame() : pauseGame(); } });
+    // Keyboard (web/portals): ←/→ or A/D steer, Esc/P pause, Enter/Space start or continue.
+    const keys = { l: false, r: false };
+    const keyDir = k => (k === 'ArrowLeft' || k === 'a' || k === 'A') ? 'l' : (k === 'ArrowRight' || k === 'd' || k === 'D') ? 'r' : null;
+    window.addEventListener('keydown', e => {
+      if (AuraBox.isOpen()) return; // aura box / index handle their own keys
+      if (e.key === 'Escape' || e.key === 'p') { state === 'PAUSED' ? resumeGame() : pauseGame(); return; }
+      const d = keyDir(e.key); if (d) { keys[d] = true; e.preventDefault(); return; }
+      if ((e.key === 'Enter' || e.key === ' ') && !e.repeat && !(e.target && e.target.closest && e.target.closest('button'))) {
+        if (state === 'START' && $('startModal').style.display !== 'none' && $('metaShop').style.display === 'none') { e.preventDefault(); startGame(); }
+        else if (state === 'GATE') { e.preventDefault(); enterBoss(); }
+        else if (state === 'VICTORY' || state === 'GAMEOVER') { e.preventDefault(); nextLevel(); }
+      }
+    });
+    window.addEventListener('keyup', e => { const d = keyDir(e.key); if (d) keys[d] = false; });
+    window.addEventListener('blur', () => { keys.l = keys.r = false; });
     document.addEventListener('visibilitychange', () => { if (document.hidden) { pauseGame(); recordBest(); } });
 
     // Android back button: pause a run, resume from pause, close a menu, or leave the app from the title screen.
     if (Native.App && isNative) {
       try {
         Native.App.addListener('backButton', () => {
+          if (AuraBox.back()) return;
           if (state === 'PLAYING' || state === 'BOSS') pauseGame();
           else if (state === 'PAUSED') resumeGame();
           else if (state === 'VICTORY' || state === 'GAMEOVER') quitToTitle();
@@ -375,26 +452,26 @@
     if (Native.StatusBar && isNative) { try { Native.StatusBar.hide(); } catch (e) { /* ignore */ } }
 
     function quitToTitle() {
-      if (state === 'PLAYING' || state === 'BOSS' || state === 'PAUSED' || state === 'VICTORY') { recordBest(); endRunEssence(); }
+      if (state === 'PLAYING' || state === 'BOSS' || state === 'PAUSED' || state === 'VICTORY' || state === 'GATE') { recordBest(); endRunEssence(); AuraBox.endRun(runPlayed()); }
       state = 'START'; pausedFrom = null; dragging = false; boss = null;
       for (const key in entities) entities[key].length = 0;
-      ['pauseModal', 'endModal'].forEach(id => $(id).style.display = 'none');
+      ['pauseModal', 'endModal', 'gateModal'].forEach(id => $(id).style.display = 'none'); Portal.gameplayStop(); $('adOffers').innerHTML = '';
       $('ui').style.display = 'none'; $('bossUI').style.display = 'none';
       $('damageOverlay').style.opacity = '0'; $('slowmoOverlay').style.opacity = '0'; damageFlash = 0; slowMoTimer = 0;
-      $('startBest').textContent = bestText(); renderEssence(); $('startModal').style.display = 'flex';
+      $('startBest').textContent = bestText(); renderEssence(); renderChest(); $('startModal').style.display = 'flex';
       if (actx && actx.state === 'running') actx.suspend();
     }
 
     function pauseGame() {
       if (state !== 'PLAYING' && state !== 'BOSS') return;
-      pausedFrom = state; state = 'PAUSED'; dragging = false;
+      pausedFrom = state; state = 'PAUSED'; dragging = false; Portal.gameplayStop();
       $('pauseDesc').textContent = `Zone ${level} · ✨ ${Math.round(aura)} aura`;
       $('pauseModal').style.display = 'flex';
       if (actx && actx.state === 'running') actx.suspend();
     }
     function resumeGame() {
       if (state !== 'PAUSED') return;
-      state = pausedFrom; $('pauseModal').style.display = 'none';
+      state = pausedFrom; $('pauseModal').style.display = 'none'; Portal.gameplayStart();
       lastTime = performance.now();
       if (actx) actx.resume();
     }
@@ -402,35 +479,48 @@
     // ----- Run / zone flow -----
     function startGame() {
       initAudio(); $('startModal').style.display = 'none'; $('ui').style.display = 'block';
-      newRun();
+      newRun(); Portal.gameplayStart();
     }
     function newRun() {
-      level = 1; aura = 0; carrySquad = 0; runKills = 0; runAuraEarned = 0; runAwarded = false;
+      level = 1; aura = 0; carrySquad = 0; runKills = 0; runAuraEarned = 0; runAwarded = false; troopStage = 0; evolveFlash = 0;
+      runRevived = false; runDoubled = false; AuraBox.startRun();
       upgrades = { recruits: 0, rate: 0, dmg: 0, shield: 0 };
       initLevel();
     }
 
-    function generateGateAction(isBad) {
+    function generateGateAction(isBad, forceForm) {
       if (isBad) {
         const loss = 8 + level * 2, r = Math.random();
         if (level >= 2 && r < 0.35) { const pc = level >= 5 ? 40 : 30; return { text: `-${pc}% SQUAD`, type: 'SQUADPCT', val: -pc / 100, isBad: true }; }
         return r < 0.65 ? { text: `-${loss} SQUAD`, type: 'SQUAD', val: -loss, isBad: true }
                         : { text: `-250 AURA`, type: 'AURA', val: -250, isBad: true };
       }
-      const r = Math.random();
-      if (r < 0.45) { const v = Math.floor(Math.random() * 12) + 6 + level * 2; return { text: `+${v} SQUAD`, type: 'SQUAD', val: v, cap: v + 8 }; }
-      if (r < 0.75) {
+      if (forceForm) {
         const f = ['WIDE', 'SPEARHEAD', 'GRID'][Math.floor(Math.random() * 3)];
-        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f };
+        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f, checkpoint: true };
+      }
+      const r = Math.random();
+      if (r < 0.42) { const v = Math.floor(Math.random() * 12) + 6 + level * 2; return { text: `+${v} SQUAD`, type: 'SQUAD', val: v, cap: v + 8 }; }
+      if (r < 0.72) {
+        const f = ['WIDE', 'SPEARHEAD', 'GRID'][Math.floor(Math.random() * 3)];
+        return { text: f === 'GRID' ? 'GRID FORMATION' : f === 'WIDE' ? 'WIDE FORMATION' : 'SPEARHEAD', type: 'FORM', val: f, checkpoint: true };
       }
       return { text: `+500 AURA`, type: 'AURA', val: 500 };
     }
-    function makeGatePair(y, allowBad) {
+    function makeGatePair(y, allowBad, forceAbility) {
+      // Ability checkpoints: one side is always a formation swap (clearly labeled in 3rd-person).
+      if (forceAbility) {
+        const side = Math.random() < 0.5 ? 'left' : 'right';
+        const form = generateGateAction(false, true);
+        const other = generateGateAction(false);
+        const left = side === 'left' ? form : other, right = side === 'right' ? form : other;
+        return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true, ability: true };
+      }
       const badSide = allowBad && Math.random() < 0.45 ? (Math.random() < 0.5 ? 'left' : 'right') : null;
       let left = generateGateAction(badSide === 'left'), right = generateGateAction(badSide === 'right');
       let guard = 0;
       while (!left.isBad && !right.isBad && left.text === right.text && guard++ < 10) right = generateGateAction(false);
-      return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true };
+      return { y, left: { x: -95, ...left, hitTime: 0 }, right: { x: 95, ...right, hitTime: 0 }, active: true, ability: !!(left.checkpoint || right.checkpoint) };
     }
     function spawnSwarmRow(y) {
       // 5 slots across the road; one is always left empty so there's a gap to slip through.
@@ -439,7 +529,7 @@
       slots.forEach((x, i) => {
         if (i === gap) return;
         const hp = Math.round((20 + level * 6) * enemyHpMul());
-        entities.enemies.push({ x, baseX: x, y, phase, hp, maxHp: hp, type: 'SWARM', aura: 50, active: true, hitTime: 0 });
+        entities.enemies.push({ x, baseX: x, y, phase, hp, maxHp: hp, type: 'SWARM', aura: 50, active: true, hitTime: 0, skin: level >= 3 && phase > Math.PI ? 'swarmB' : (i % 2 ? 'swarmC' : 'swarmA') });
       });
     }
     function spawnTanks(y) {
@@ -450,25 +540,31 @@
     function initLevel() {
       state = 'PLAYING'; trackProgress = 0; zoneTime = 0;
       trackLength = 5000 + level * 1000; baseSpeed = 240 + level * 10;
+      if (BOSS_FORCE) trackLength = 980; // ?boss= playtest: the gate is a few seconds up the road
       squad.x = 0; squad.targetX = 0; squad.drawX = 0; squad.formation = 'GRID'; squad.shootTimer = 0;
+      squad.motion = Motion.create();
       squad.fireRate = 4.5 * (1 + 0.15 * upgrades.rate) * (1 + 0.03 * meta.lv.spd);
       squad.count = Math.max(8 + upgrades.recruits * 4 + meta.lv.hp * 2, carrySquad); squad.visualCount = squad.count;
-      shieldCharges = upgrades.shield; lastStandUsed = false;
-      timeScale = 1.0; slowMoTimer = 0; damageFlash = 0; zoneAuraStart = aura;
+      shieldCharges = upgrades.shield; lastStandUsed = false; zoneBonusUsed = false; squadOfferShown = false;
+      timeScale = 1.0; slowMoTimer = 0; damageFlash = 0; zoneAuraStart = aura; dustBlind = 0; dustSlow = 0;
       for (const key in entities) entities[key].length = 0;
-      boss = null; $('bossUI').style.display = 'none'; $('endModal').style.display = 'none';
+      boss = null; $('bossUI').style.display = 'none'; $('endModal').style.display = 'none'; $('boxOffer').innerHTML = '';
       $('levelBadge').textContent = `ZONE ${level}`;
       $('tierBadge').textContent = 'FORMATION: GRID';
       $('hint').style.display = 'block';
       save.bestZone = Math.max(save.bestZone, level); persist();
       updateAuraUI();
 
-      // Safe start: the first ~3 s only has a friendly gate; enemies begin further up the track.
+      // Safe start: friendly gate, then regular gates + ability checkpoints (formation swaps).
       entities.gates.push(makeGatePair(800, false));
-      let y = 1350;
+      let y = 1350, gateN = 0;
       const gap = Math.max(330, 500 - level * 25);
       while (y < trackLength - 500) {
-        if (Math.random() < Math.max(0.3, 0.44 - level * 0.02)) { entities.gates.push(makeGatePair(y, true)); y += 600; continue; }
+        if (Math.random() < Math.max(0.3, 0.44 - level * 0.02)) {
+          gateN++;
+          entities.gates.push(makeGatePair(y, true, gateN % 3 === 0)); // every 3rd gate pair is an ability checkpoint
+          y += 600; continue;
+        }
         const r = Math.random();
         if (r < 0.5) spawnSwarmRow(y);
         else spawnTanks(y);
@@ -477,20 +573,25 @@
       }
     }
 
-    function spawnBoss() {
-      state = 'BOSS';
-      const hp = bossHp();
-      boss = { x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false };
+    function spawnBoss(kind) {
+      state = 'BOSS'; kind = kind || bossKind();
+      const meta = bossMeta(kind);
+      const hp = Math.round(bossHp() * meta.hpMul);
+      boss = { kind, sprite: meta.sprite, x: 0, y: trackProgress + 600, hp, maxHp: hp, state: 'IDLE', timer: 1.0, hitTime: 0, active: true, targetX: 0, lanes: [], shielded: false, near: 0, attacks: 0, dir: 1, swept: false, anim: kind === 'argento' ? 'idle' : 'attack', frame: 0, animT: 0, dying: false, flinch: 0, flinchCd: 0, runDist: 0 };
+      entities.dust = entities.dust || []; entities.dust.length = 0; dustBlind = 0; dustSlow = 0;
+      $('bossName').textContent = meta.name;
       $('bossUI').style.display = 'flex'; $('bossHpBar').style.width = '100%';
+      addFloatText(0, trackProgress + 300, meta.shout, '#facc15');
       baseSpeed = 80;
     }
 
     function addAura(v) {
-      if (v > 0) { v = Math.round(v * (1 + 0.08 * meta.lv.luck)); runAuraEarned += v; }
+      if (v > 0) { v = Math.round(v * (1 + 0.08 * meta.lv.luck)); runAuraEarned += v; checkEvolve(); }
       aura = Math.max(0, aura + v); updateAuraUI();
       return v;
     }
     const runEssence = () => Math.floor(runKills / 4 + level * 10 + runAuraEarned / 120);
+    const runPlayed = () => runKills >= 3 || level > 1 || runAuraEarned > 0; // a real attempt, not start -> quit
     function endRunEssence() { if (runAwarded) return 0; runAwarded = true; return awardEssence(runEssence()); }
     function updateAuraUI() { $('auraBadge').textContent = `✨ ${Math.round(aura)} AURA`; }
 
@@ -499,6 +600,16 @@
         const ang = Math.random() * Math.PI * 2, spd = 80 + Math.random() * 250;
         entities.particles.push({ x, y, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, color, life: 0.5, size: (6 + Math.random() * 8) * size });
       }
+    }
+    // Squad evolution: a new stage unlocks once enough aura is earned in this run -> flash, badge, burst, sound.
+    function checkEvolve() {
+      const st = Sprites.stageFor(runAuraEarned);
+      if (st <= troopStage) return;
+      troopStage = st; evolveFlash = 0.6;
+      const badgeUI = $('tierBadge'); badgeUI.textContent = `EVOLVED: ${Sprites.EVOLVE[st].title} SQUAD!`;
+      badgeUI.classList.add('tier-pop'); setTimeout(() => badgeUI.classList.remove('tier-pop'), 200);
+      spawnExplosion(squad.x, 0, '#67e8f9', 40, 1.4); addFloatText(squad.x, 40, `EVOLVED: ${Sprites.EVOLVE[st].title}!`, '#67e8f9');
+      playSound('powerup'); buzz('success');
     }
     function addFloatText(x, y, str, color) { entities.texts.push({ x, y, str, color, life: 0.9, vy: 70 }); }
     function triggerShake(amount) { screenShake = Math.max(screenShake, amount); }
@@ -510,7 +621,8 @@
         spawnExplosion(x, y, '#facc15', 18); playSound('powerup'); triggerShake(6);
         return false;
       }
-      squad.count -= n; hurtFlash(); triggerShake(15); playSound('damage'); buzz('heavy');
+      squad.count -= n; hurtFlash(); triggerShake(reducedMotion ? 6 : 15); playSound('damage'); buzz('heavy');
+      if (squad.motion) squad.motion.hit = 0.14;
       if (squad.count <= 3 && !lastStandUsed && zoneTime > 3 && squad.count > 0) triggerLastStand();
       if (squad.count < 1) { gameOver(); return true; }
       return false;
@@ -531,7 +643,7 @@
           $('slowmoOverlay').style.opacity = slowMoTimer > 0 ? '1' : '0';
           update(rawDt * timeScale, rawDt);
         }
-        render(rawDt);
+        if (!AuraBox.covering()) render(rawDt);
       } catch (err) {
         const msg = String(err && err.stack || err);
         if (msg !== lastErr) { console.error('[game loop]', err); lastErr = msg; }
@@ -543,9 +655,9 @@
       const slots = [];
       if (form === 'SPEARHEAD') {
         const rows = Math.min(5, Math.ceil(Math.sqrt(n))), m = Math.min(n, rows * rows);
-        for (let i = 0; i < m; i++) { const r = Math.floor(Math.sqrt(i)), c = i - r * r; slots.push([(c - r) * 14, -r * 20]); }
+        for (let i = 0; i < m; i++) { const r = Math.floor(Math.sqrt(i)), c = i - r * r; slots.push([(c - r) * 19, -r * 27]); }
       } else {
-        const wide = form === 'WIDE', sp = wide ? 19 : 22;
+        const wide = form === 'WIDE', sp = wide ? 26 : 30;
         const cols = wide ? Math.min(12, n) : Math.min(9, Math.max(1, Math.ceil(Math.sqrt(n))));
         const rows = Math.min(wide ? 3 : 4, Math.ceil(n / cols)), m = Math.min(n, cols * rows);
         for (let i = 0; i < m; i++) {
@@ -557,17 +669,391 @@
       return { slots, hw: hw + 8 };
     }
 
+    // Sweeping Old Man: Dust Bawl (telegraphed wind-up, then rolling dust balls that grow as they roll) and a broom-sweep
+    // melee arc when he shuffles in close. Returns true if the run ended.
+    function updateSweeper(dt) {
+      const b = boss; b.timer -= dt; if (b.hitTime > 0) b.hitTime -= dt;
+      b.near += ((b.state === 'LUNGE' || b.state === 'SWEEP') ? 1 : -1) * dt * 2.2; b.near = Math.max(0, Math.min(1, b.near));
+      b.y = trackProgress + 450 - b.near * 270;
+      if (b.state === 'IDLE') {
+        b.x += (squad.x * 0.5 - b.x) * 1.5 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 3 === 0) { b.state = 'LUNGE'; b.timer = 0.75; b.targetX = squad.x; }
+          else { b.state = 'WINDUP'; b.timer = Math.max(0.7, 1.15 - 0.07 * (level - 1)); b.targetX = squad.x; }
+          playSound('powerup');
+        }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          const n = Math.min(4, 1 + Math.floor(level / 2)), spread = 90;
+          for (let i = 0; i < n; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * spread));
+            const T = 2.0; entities.dust.push({ x: b.x, y: b.y - 40, vx: (tx - b.x) / T, vy: -(450 + 120) / T, r: 14, hp: 60 * enemyHpMul(), spin: 0, flavor: 'dust' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.5; playSound('laser'); triggerShake(8);
+        }
+      } else if (b.state === 'LUNGE') {
+        b.x += (b.targetX - b.x) * 3 * dt;
+        if (b.timer <= 0) { b.state = 'SWEEP'; b.timer = 0.45; b.shielded = false; b.swept = false; playSound('laser'); triggerShake(14); buzz('heavy'); }
+      } else if (b.state === 'SWEEP') {
+        if (!b.swept && Math.abs(squad.x - b.x) < 125) {
+          b.swept = true; spawnExplosion(squad.x, trackProgress + 20, '#e7d8bf', 22);
+          if (loseTroops(Math.max(6, Math.round(squad.count * (0.25 + 0.02 * level))), squad.x, trackProgress)) return true;
+        }
+        if (b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.6; }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.7, 1.7 - 0.2 * (level - 1)); }
+      }
+      // rolling dust balls: grow as they roll toward the squad; bullets chip them down
+      for (let i = entities.dust.length - 1; i >= 0; i--) {
+        const d = entities.dust[i]; d.x += d.vx * dt; d.y += d.vy * dt + baseSpeed * dt * 0.2; d.r = Math.min(40, d.r + 14 * dt); d.spin += dt * 6;
+        let gone = d.hp <= 0 || d.y < trackProgress - 200;
+        if (!gone && Math.abs(d.x - squad.x) < d.r + 22 && Math.abs(d.y - trackProgress) < d.r) {
+          gone = true; spawnExplosion(d.x, d.y, '#e7d8bf', 26, 1.3);
+          if (shieldCharges <= 0) { dustBlind = 1.4; dustSlow = 1.2; addFloatText(squad.x, trackProgress + 90, 'DUSTED!', '#e7d8bf'); }
+          if (loseTroops(Math.max(3, Math.round(squad.count * (0.1 + 0.01 * level))), d.x, d.y)) return true;
+        }
+        if (gone) { if (d.hp <= 0) { spawnExplosion(d.x, d.y, '#e7d8bf', 14); addAura(40); } entities.dust.splice(i, 1); }
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Grump King: telegraphed laser lanes (share of squad while standing in them).
+    function updateGrump(dt) {
+      const b = boss; b.y = trackProgress + 450; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (0 - b.x) * 2 * dt;
+        if (b.timer <= 0) {
+          b.state = 'TELEGRAPH'; b.timer = Math.max(0.9, 1.5 - 0.1 * (level - 1));
+          b.targetX = squad.x; b.lanes = [squad.x];
+          if (level >= 3) {
+            const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (130 + Math.random() * 60);
+            if (Math.abs(x2) <= 170) b.lanes.push(x2);
+          }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        if (b.timer <= 0) {
+          b.state = 'STRIKE'; b.timer = level >= 5 ? 0.95 : 0.8; b.shielded = false;
+          playSound('laser'); triggerShake(15); buzz('heavy');
+        }
+      } else if (b.state === 'STRIKE') {
+        if (b.lanes.some(lx => Math.abs(squad.x - lx) < 60)) {
+          if (!b.shielded && shieldCharges > 0) {
+            b.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
+          }
+          if (!b.shielded) {
+            squad.count -= Math.max(10, squad.count * 0.9) * dt; damageFlash = 0.12;
+            if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+            if (squad.count < 1) { gameOver(); return true; }
+          }
+        }
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.8, 2.0 - 0.25 * (level - 1)); }
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Espressorilla: steam jets (lane scald) + lobbed espresso cups (shootable, like dust).
+    function updateEspresso(dt) {
+      const b = boss; b.y = trackProgress + 460; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (squad.x * 0.35 - b.x) * 1.6 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 3 === 0) {
+            b.state = 'WINDUP'; b.timer = Math.max(0.65, 1.05 - 0.06 * (level - 1)); b.targetX = squad.x;
+          } else {
+            b.state = 'TELEGRAPH'; b.timer = Math.max(0.85, 1.35 - 0.08 * (level - 1));
+            b.lanes = [squad.x];
+            if (level >= 2) {
+              const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (110 + Math.random() * 50);
+              if (Math.abs(x2) <= 170) b.lanes.push(x2);
+            }
+            if (level >= 5) b.lanes.push(0);
+          }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        if (b.timer <= 0) { b.state = 'STRIKE'; b.timer = 0.85; b.shielded = false; playSound('laser'); triggerShake(12); buzz('heavy'); }
+      } else if (b.state === 'STRIKE') {
+        if (b.lanes.some(lx => Math.abs(squad.x - lx) < 55)) {
+          if (!b.shielded && shieldCharges > 0) {
+            b.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
+          }
+          if (!b.shielded) {
+            squad.count -= Math.max(8, squad.count * 0.75) * dt; damageFlash = 0.1;
+            if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+            if (squad.count < 1) { gameOver(); return true; }
+          }
+        }
+        if (b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.45; }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          const n = Math.min(5, 2 + Math.floor(level / 2));
+          for (let i = 0; i < n; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * 70));
+            const T = 1.7;
+            entities.dust.push({ x: b.x + (i - (n - 1) / 2) * 18, y: b.y - 50, vx: (tx - b.x) / T, vy: -(420) / T, r: 11, hp: 50 * enemyHpMul(), spin: 0, flavor: 'espresso' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.4; playSound('laser'); triggerShake(8);
+        }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.65, 1.55 - 0.18 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'SCALDED!', tint: '#78350f', blind: false, dmgShare: 0.09 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Flamenco Rotorina: rotor telegraph, then a diving blade sweep across the road.
+    function updateFlamenco(dt) {
+      const b = boss; b.timer -= dt; if (b.hitTime > 0) b.hitTime -= dt;
+      b.near += ((b.state === 'LUNGE' || b.state === 'SWEEP') ? 1 : -1) * dt * 2.4; b.near = Math.max(0, Math.min(1, b.near));
+      b.y = trackProgress + 480 - b.near * 300;
+      if (b.state === 'IDLE') {
+        b.x += (Math.sin(zoneTime * 1.4) * 90 - b.x) * 2 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 2 === 0) { b.state = 'TELEGRAPH'; b.timer = Math.max(0.7, 1.1 - 0.06 * (level - 1)); b.targetX = squad.x; }
+          else { b.state = 'WINDUP'; b.timer = 0.85; b.targetX = squad.x; }
+          playSound('powerup');
+        }
+      } else if (b.state === 'TELEGRAPH') {
+        b.x += (b.targetX - b.x) * 2.5 * dt;
+        if (b.timer <= 0) { b.state = 'LUNGE'; b.timer = 0.55; playSound('laser'); triggerShake(10); }
+      } else if (b.state === 'LUNGE') {
+        b.x += (b.targetX - b.x) * 4 * dt;
+        if (b.timer <= 0) { b.state = 'SWEEP'; b.timer = 0.5; b.shielded = false; b.swept = false; buzz('heavy'); triggerShake(16); }
+      } else if (b.state === 'SWEEP') {
+        // wide rotor blade disc
+        if (!b.swept && Math.abs(squad.x - b.x) < 145) {
+          b.swept = true; spawnExplosion(squad.x, trackProgress + 20, '#fda4af', 28);
+          if (loseTroops(Math.max(7, Math.round(squad.count * (0.28 + 0.02 * level))), squad.x, trackProgress)) return true;
+        }
+        if (b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.55; }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          // feather gust orbs
+          for (let i = 0; i < 3; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - 1) * 85));
+            const T = 1.6;
+            entities.dust.push({ x: b.x, y: b.y - 30, vx: (tx - b.x) / T, vy: -(400) / T, r: 12, hp: 40 * enemyHpMul(), spin: 0, flavor: 'feather' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.35; playSound('laser');
+        }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.6, 1.5 - 0.16 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'GUSTED!', tint: '#f9a8d4', blind: false, dmgShare: 0.08 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Squalo Supremo: side-to-side charge + dual cannon shells (shootable).
+    function updateSqualo(dt) {
+      const b = boss; b.y = trackProgress + 440; b.timer -= dt;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.state === 'IDLE') {
+        b.x += (b.dir * 70 - b.x) * 1.2 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          if (b.attacks % 3 === 0) { b.state = 'LUNGE'; b.timer = 0.9; b.targetX = b.dir > 0 ? 150 : -150; b.shielded = false; b.swept = false; playSound('powerup'); }
+          else { b.state = 'WINDUP'; b.timer = Math.max(0.6, 0.95 - 0.05 * (level - 1)); b.targetX = squad.x; playSound('powerup'); }
+        }
+      } else if (b.state === 'WINDUP') {
+        if (b.timer <= 0) {
+          const n = Math.min(6, 2 + Math.floor(level / 2));
+          for (let i = 0; i < n; i++) {
+            const tx = Math.max(-160, Math.min(160, b.targetX + (i - (n - 1) / 2) * 55));
+            const T = 1.5 + Math.random() * 0.3;
+            entities.dust.push({ x: b.x + (i % 2 ? 14 : -14), y: b.y - 40, vx: (tx - b.x) / T, vy: -(460) / T, r: 10, hp: 70 * enemyHpMul(), spin: 0, flavor: 'shell' });
+          }
+          b.state = 'RECOVER'; b.timer = 0.4; playSound('laser'); triggerShake(10);
+        }
+      } else if (b.state === 'LUNGE') {
+        b.x += (b.targetX - b.x) * 3.5 * dt;
+        // ramming anyone near the tread line
+        if (Math.abs(squad.x - b.x) < 95 && Math.abs((trackProgress + 30) - b.y) < 120) {
+          if (!b.swept) {
+            b.swept = true; spawnExplosion(squad.x, trackProgress + 10, '#0e7490', 24);
+            if (loseTroops(Math.max(8, Math.round(squad.count * (0.3 + 0.02 * level))), squad.x, trackProgress)) return true;
+          }
+        }
+        if (b.timer <= 0) { b.dir *= -1; b.state = 'RECOVER'; b.timer = 0.5; }
+      } else if (b.state === 'RECOVER') {
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.55, 1.4 - 0.15 * (level - 1)); }
+      }
+      if (updateBossOrbs(dt, { label: 'SHELL HIT!', tint: '#334155', blind: false, dmgShare: 0.11 })) return true;
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Yeti Scudiero: Michael's art. Overhead smash, ice/lightning bolt, flash-lunge special. Idle = frame 0.
+    // On death, plays the defeat strip then victory (no invented walk/spin).
+    function updateYeti(dt) {
+      const b = boss;
+      if (b.hitTime > 0) b.hitTime -= dt;
+      if (b.dying) {
+        b.animT += dt;
+        const fi = Math.min(9, Math.floor(b.animT / 0.09));
+        b.anim = 'defeat'; b.frame = fi;
+        b.y = trackProgress + 450;
+        $('bossHpBar').style.width = '0%';
+        if (b.animT >= 0.95) {
+          b.active = false; entities.dust.length = 0; addAura(5000 + (level - 1) * 1000);
+          playSound('powerup'); spawnExplosion(b.x, b.y, '#93c5fd', 60); triggerShake(20); buzz('success'); victory();
+          return true;
+        }
+        return false;
+      }
+      b.y = trackProgress + 450; b.timer -= dt;
+      const setAnim = (anim, fps = 11) => {
+        if (b.anim !== anim) { b.anim = anim; b.animT = 0; b.frame = 0; }
+        b.animT += dt; b.frame = Math.min(9, Math.floor(b.animT * fps));
+      };
+      if (b.state === 'IDLE') {
+        b.anim = 'attack'; b.frame = 0; b.animT = 0;
+        b.x += (squad.x * 0.25 - b.x) * 1.4 * dt;
+        if (b.timer <= 0) {
+          b.attacks++;
+          const pick = b.attacks % 3; // 1 cast, 2 overhead, 0 special
+          if (pick === 1) { b.state = 'CAST'; b.timer = 1.05; b.targetX = squad.x; b.lanes = [squad.x]; if (level >= 3) { const s = squad.x > 0 ? -1 : 1, x2 = squad.x + s * 120; if (Math.abs(x2) <= 170) b.lanes.push(x2); } }
+          else if (pick === 2) { b.state = 'OVERHEAD'; b.timer = 1.0; b.targetX = squad.x; b.shielded = false; b.swept = false; }
+          else { b.state = 'SPECIAL'; b.timer = 0.95; b.targetX = squad.x; b.shielded = false; b.swept = false; }
+          playSound('powerup');
+        }
+      } else if (b.state === 'CAST') {
+        setAnim('cast', 10);
+        // telegraph: icy lane(s) while gathering (frames 0-6), bolt hits 7-9
+        if (b.frame >= 7) {
+          if (!b.lanes) b.lanes = [b.targetX];
+          for (const lx of b.lanes) {
+            if (Math.abs(squad.x - lx) < 55) {
+              if (!b.shielded && shieldCharges > 0) { b.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup'); }
+              if (!b.shielded) {
+                squad.count -= Math.max(9, squad.count * 0.8) * dt; damageFlash = 0.12; dustSlow = Math.max(dustSlow, 0.6);
+                if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+                if (squad.count < 1) { gameOver(); return true; }
+              }
+            }
+          }
+        }
+        if (b.frame >= 9 && b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.45; playSound('laser'); triggerShake(14); buzz('heavy'); }
+        else if (b.timer <= 0 && b.frame < 9) b.timer = 0.05;
+      } else if (b.state === 'OVERHEAD') {
+        setAnim('overhead', 10);
+        b.x += (b.targetX - b.x) * 2.2 * dt;
+        // jump visual via near; slam damage late frames
+        b.near = b.frame >= 4 && b.frame <= 8 ? Math.min(1, (b.frame - 3) / 4) : Math.max(0, b.near - dt * 3);
+        b.y = trackProgress + 450 - b.near * 160;
+        if (b.frame >= 8 && !b.swept) {
+          b.swept = true; spawnExplosion(b.x, trackProgress + 10, '#93c5fd', 30, 1.3); playSound('laser'); triggerShake(18); buzz('heavy');
+          if (Math.abs(squad.x - b.x) < 110) {
+            if (loseTroops(Math.max(8, Math.round(squad.count * (0.32 + 0.02 * level))), squad.x, trackProgress)) return true;
+          }
+        }
+        if (b.frame >= 9 && b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.5; b.near = 0; }
+        else if (b.timer <= 0 && b.frame < 9) b.timer = 0.05;
+      } else if (b.state === 'SPECIAL') {
+        setAnim('attack', 11);
+        // flash at frame 1, then shove toward the squad
+        if (b.frame >= 3) b.x += (b.targetX - b.x) * 3.5 * dt;
+        if (b.frame >= 5 && b.frame <= 8 && Math.abs(squad.x - b.x) < 100) {
+          if (!b.swept) {
+            b.swept = true; spawnExplosion(squad.x, trackProgress + 15, '#e2e8f0', 26);
+            if (loseTroops(Math.max(7, Math.round(squad.count * (0.26 + 0.02 * level))), squad.x, trackProgress)) return true;
+          }
+        }
+        if (b.frame >= 9 && b.timer <= 0) { b.state = 'RECOVER'; b.timer = 0.4; }
+        else if (b.timer <= 0 && b.frame < 9) b.timer = 0.05;
+      } else if (b.state === 'RECOVER') {
+        b.anim = 'attack'; b.frame = 0; b.near = 0;
+        if (b.timer <= 0) { b.state = 'IDLE'; b.timer = Math.max(0.55, 1.45 - 0.14 * (level - 1)); }
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Asciero Argento: silver axe warden. Cast lane, overhead slam, leap. Death strip then the usual aura payout.
+    // The pure timing lives in js/axe-boss.js so tests can step it without the canvas.
+    function updateArgento(dt) {
+      const b = boss;
+      const out = AxeBoss.step(b, { dt, squadX: squad.x, level, squadCount: squad.count, shieldCharges });
+      b.y = trackProgress + 450;
+      if (out.sound === 'powerup') playSound('powerup');
+      if (out.sound === 'laser') { playSound('laser'); triggerShake(reducedMotion ? out.shake * 0.35 : out.shake); buzz('heavy'); }
+      if (out.shield) {
+        shieldCharges = Math.max(0, shieldCharges - 1);
+        addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15');
+        playSound('powerup');
+      } else if (out.label && (out.melee > 0 || out.drain > 0)) {
+        addFloatText(squad.x, trackProgress + 90, out.label, '#e2e8f0');
+      }
+      if (out.melee > 0) {
+        spawnExplosion(squad.x, trackProgress + 16, '#e2e8f0', 26, 1.2);
+        if (loseTroops(out.melee, squad.x, trackProgress)) return true;
+      } else if (out.drain > 0) {
+        squad.count -= out.drain; damageFlash = 0.12; dustSlow = Math.max(dustSlow, 0.45);
+        if (squad.motion) squad.motion.hit = Math.max(squad.motion.hit, 0.1);
+        if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
+        if (squad.count < 1) { gameOver(); return true; }
+      }
+      if (out.victory) {
+        addAura(out.aura); playSound('powerup');
+        spawnExplosion(b.x, b.y, '#e2e8f0', reducedMotion ? 18 : 56);
+        triggerShake(reducedMotion ? 8 : 20); buzz('success'); victory();
+        return true;
+      }
+      $('bossHpBar').style.width = `${Math.max(0, (b.hp / b.maxHp) * 100)}%`;
+      return false;
+    }
+
+    // Shared rolling orb / projectile logic for espresso cups, feathers, shells (and sweeper still has its own).
+    function updateBossOrbs(dt, opt) {
+      for (let i = entities.dust.length - 1; i >= 0; i--) {
+        const d = entities.dust[i]; d.x += d.vx * dt; d.y += d.vy * dt + baseSpeed * dt * 0.2; d.r = Math.min(36, d.r + 12 * dt); d.spin += dt * 6;
+        let gone = d.hp <= 0 || d.y < trackProgress - 200;
+        if (!gone && Math.abs(d.x - squad.x) < d.r + 22 && Math.abs(d.y - trackProgress) < d.r) {
+          gone = true; spawnExplosion(d.x, d.y, opt.tint, 22, 1.2);
+          if (opt.blind && shieldCharges <= 0) { dustBlind = 1.2; dustSlow = 1.0; }
+          addFloatText(squad.x, trackProgress + 90, opt.label, opt.tint);
+          if (loseTroops(Math.max(3, Math.round(squad.count * (opt.dmgShare + 0.01 * level))), d.x, d.y)) return true;
+        }
+        if (gone) { if (d.hp <= 0) { spawnExplosion(d.x, d.y, opt.tint, 12); addAura(35); } entities.dust.splice(i, 1); }
+      }
+      return false;
+    }
+
     function update(dt, rawDt) {
       trackProgress += baseSpeed * dt; zoneTime += dt;
+      if (keys.l !== keys.r && !dragging) { squad.targetX = Math.max(-150, Math.min(150, squad.targetX + (keys.r ? 1 : -1) * 340 * rawDt)); hideHint(); }
       if (zoneTime > 4 && $('hint').style.display !== 'none') hideHint();
       const pct = trackProgress / trackLength;
 
       if (state === 'PLAYING') {
         $('progressBar').style.width = `${Math.min(100, pct * 100)}%`;
-        if (trackProgress > trackLength) spawnBoss();
+        if (trackProgress > trackLength) { if (!offerDoubleSquad()) spawnBoss(); }
       }
 
-      squad.x += (squad.targetX - squad.x) * Math.min(1, 12 * dt);
+      if (dustSlow > 0) dustSlow -= dt; if (dustBlind > 0) dustBlind -= dt;
+      // Body eases onto the steering target. Collision still reads squad.x.
+      if (!squad.motion) squad.motion = Motion.create();
+      Motion.step(squad.motion, squad.targetX, dt, { forward: baseSpeed, reduced: reducedMotion, dustSlow: dustSlow > 0, minX: -150, maxX: 150 });
+      squad.x = squad.motion.x;
+      if (state === 'BOSS' && boss.active) {
+        const ended = boss.kind === 'sweeper' ? updateSweeper(dt)
+          : boss.kind === 'espresso' ? updateEspresso(dt)
+          : boss.kind === 'flamenco' ? updateFlamenco(dt)
+          : boss.kind === 'squalo' ? updateSqualo(dt)
+          : boss.kind === 'yeti' ? updateYeti(dt)
+          : boss.kind === 'argento' ? updateArgento(dt)
+          : updateGrump(dt);
+        if (ended) return;
+      }
       if (squad.visualCount < squad.count) {
         squad.visualCount += (squad.count - squad.visualCount) * 4 * dt;
         if (squad.count - squad.visualCount < 0.5) squad.visualCount = squad.count;
@@ -589,42 +1075,6 @@
           const bx = Math.max(-ROAD_HALF, Math.min(ROAD_HALF, squad.drawX + (i - (numBullets - 1) / 2) * spreadMul));
           entities.bullets.push({ x: bx, y: trackProgress + 45, vy: 900, dmg, life: squad.fireRange / 900 });
         }
-      }
-
-      // Boss: telegraphed laser, faster in later zones; the laser takes a share of the squad
-      if (state === 'BOSS' && boss.active) {
-        boss.y = trackProgress + 450; boss.timer -= dt;
-        if (boss.hitTime > 0) boss.hitTime -= dt;
-        if (boss.state === 'IDLE') {
-          boss.x += (0 - boss.x) * 2 * dt;
-          if (boss.timer <= 0) {
-            boss.state = 'TELEGRAPH'; boss.timer = Math.max(0.9, 1.5 - 0.1 * (level - 1));
-            boss.targetX = squad.x; boss.lanes = [squad.x];
-            if (level >= 3) { // later zones: a second laser lane blocks one escape route
-              const side = squad.x > 0 ? -1 : 1, x2 = squad.x + side * (130 + Math.random() * 60);
-              if (Math.abs(x2) <= 170) boss.lanes.push(x2);
-            }
-            playSound('powerup');
-          }
-        } else if (boss.state === 'TELEGRAPH') {
-          if (boss.timer <= 0) {
-            boss.state = 'STRIKE'; boss.timer = level >= 5 ? 0.95 : 0.8; boss.shielded = false;
-            playSound('laser'); triggerShake(15); buzz('heavy');
-          }
-        } else if (boss.state === 'STRIKE') {
-          if (boss.lanes.some(lx => Math.abs(squad.x - lx) < 60)) {
-            if (!boss.shielded && shieldCharges > 0) {
-              boss.shielded = true; shieldCharges--; addFloatText(squad.x, trackProgress + 90, 'SHIELDED!', '#facc15'); playSound('powerup');
-            }
-            if (!boss.shielded) {
-              squad.count -= Math.max(10, squad.count * 0.9) * dt; damageFlash = 0.12; // ~half the squad per full strike
-              if (squad.count <= 3 && !lastStandUsed && squad.count >= 1) triggerLastStand();
-              if (squad.count < 1) { gameOver(); return; }
-            }
-          }
-          if (boss.timer <= 0) { boss.state = 'IDLE'; boss.timer = Math.max(0.8, 2.0 - 0.25 * (level - 1)); }
-        }
-        $('bossHpBar').style.width = `${Math.max(0, (boss.hp / boss.maxHp) * 100)}%`;
       }
 
       // Enemies
@@ -662,12 +1112,21 @@
             }
           }
         }
-        if (state === 'BOSS' && boss.active && !hit && Math.hypot(b.x - boss.x, b.y - boss.y) < 80) {
+        for (const d of entities.dust) { if (!hit && Math.hypot(b.x - d.x, b.y - d.y) < d.r + 6) { d.hp -= b.dmg; hit = true; } }
+        if (state === 'BOSS' && boss.active && !hit && !boss.dying && Math.hypot(b.x - boss.x, b.y - boss.y) < (boss.kind === 'yeti' ? 95 : boss.kind === 'argento' ? AxeBoss.HIT_R : 80)) {
           boss.hp -= b.dmg; boss.hitTime = 0.06; hit = true;
-          if (Math.random() < 0.35) spawnExplosion(b.x, b.y, '#38bdf8', 1, 0.35);
+          if (boss.kind === 'argento') AxeBoss.onHit(boss);
+          if (Math.random() < 0.35) spawnExplosion(b.x, b.y, boss.kind === 'argento' ? '#e2e8f0' : '#38bdf8', 1, 0.35);
           if (boss.hp <= 0) {
-            boss.active = false; addAura(5000 + (level - 1) * 1000); playSound('powerup');
-            spawnExplosion(boss.x, boss.y, '#facc15', 60); triggerShake(20); buzz('success'); victory(); return;
+            if (boss.kind === 'yeti') {
+              boss.hp = 0; boss.dying = true; boss.state = 'DYING'; boss.anim = 'defeat'; boss.animT = 0; boss.frame = 0;
+              entities.dust.length = 0; playSound('damage'); triggerShake(12);
+            } else if (boss.kind === 'argento') {
+              AxeBoss.kill(boss); entities.dust.length = 0; playSound('damage'); triggerShake(reducedMotion ? 5 : 12);
+            } else {
+              boss.active = false; entities.dust.length = 0; addAura(5000 + (level - 1) * 1000); playSound('powerup');
+              spawnExplosion(boss.x, boss.y, '#facc15', 60); triggerShake(20); buzz('success'); victory(); return;
+            }
           }
         }
         if (hit || b.life <= 0) { entities.bullets[i] = entities.bullets[entities.bullets.length - 1]; entities.bullets.pop(); }
@@ -690,7 +1149,7 @@
             badgeUI.classList.add('tier-pop'); setTimeout(() => badgeUI.classList.remove('tier-pop'), 200);
           } else if (chosen.type === 'AURA') addAura(chosen.val);
           if (!chosen.isBad) { playSound('powerup'); buzz('light'); }
-          const label = chosen.type === 'SQUAD' && !chosen.isBad ? `+${Math.round(chosen.val)} SQUAD` : chosen.text;
+          const label = chosen.type === 'FORM' ? `ABILITY: ${chosen.val}` : (chosen.type === 'SQUAD' && !chosen.isBad ? `+${Math.round(chosen.val)} SQUAD` : chosen.text);
           addFloatText(squad.x, g.y, label, gateColor(chosen));
           spawnExplosion(chosen.x, g.y, gateColor(chosen), 30);
         }
@@ -707,21 +1166,23 @@
       if (screenShake > 0) screenShake = Math.max(0, screenShake - rawDt * 40);
     }
 
-    // ----- Rendering -----
-    function drawVoxel(ctx, x, y, z, w, h, d, hexColor) {
-      const isoX = x; const isoY = y - z;
-      ctx.fillStyle = hexColor; ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX + w/2, isoY - h - d/3); ctx.lineTo(isoX, isoY - h - (2*d)/3); ctx.lineTo(isoX - w/2, isoY - h - d/3); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = adjustBrightness(hexColor, -25); ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX + w/2, isoY - h - d/3); ctx.lineTo(isoX + w/2, isoY - d/3); ctx.lineTo(isoX, isoY); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = adjustBrightness(hexColor, -45); ctx.beginPath(); ctx.moveTo(isoX, isoY - h); ctx.lineTo(isoX - w/2, isoY - h - d/3); ctx.lineTo(isoX - w/2, isoY - d/3); ctx.lineTo(isoX, isoY); ctx.closePath(); ctx.fill();
+    // ----- Rendering (3rd-person camera behind the squad) -----
+    // World: x left/right, y along the track (increasing ahead), z up.
+    // Camera sits behind the squad looking forward so you see your troopers from behind.
+    const CAM = { back: 260, height: 155, focal: 320, roadFar: 1400 };
+    function project(wx, wy, wz = 0) {
+      const dy = (wy - trackProgress) + CAM.back; // forward distance from camera
+      if (dy < 16) return null;
+      const s = CAM.focal / dy;
+      // Origin at bottom-center with y UP (scale y is flipped): near ≈ 0 (bottom), far climbs to horizon.
+      const yNear = CAM.height * (CAM.focal / CAM.back);
+      return { x: wx * s, y: yNear - (CAM.height - wz) * s, s, dy };
     }
     function adjustBrightness(hex, percent) {
-      let num = parseInt(hex.replace("#",""), 16), amt = Math.round(2.55 * percent);
+      let num = parseInt(hex.replace('#', ''), 16), amt = Math.round(2.55 * percent);
       let R = (num >> 16) + amt, G = (num >> 8 & 0x00FF) + amt, B = (num & 0x0000FF) + amt;
-      return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (G<255?G<1?0:G:255)*0x100 + (B<255?B<1?0:B:255)).toString(16).slice(1);
+      return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
     }
-    function drawShadow(ctx, x, y, radius) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(x, y - radius*0.2, radius, radius*0.3, 0, 0, Math.PI*2); ctx.fill(); }
-
-    // Gate colours by effect: green = growth, red = loss, blue = formation, gold = aura
     function gateColor(side) {
       if (side.isBad) return '#ef4444';
       if (side.type === 'SQUAD') return '#22c55e';
@@ -732,24 +1193,60 @@
       const n = parseInt(hex.slice(1), 16), m = c => Math.round(c + (255 - c) * t);
       return `rgb(${m(n >> 16)},${m((n >> 8) & 255)},${m(n & 255)})`;
     }
-    function drawGate(side, y) {
+    function drawShadowP(ctx, p, radius) {
+      if (!p) return;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.beginPath(); ctx.ellipse(p.x, p.y - radius * p.s * 0.08, radius * p.s, radius * p.s * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // Standing gate / ability arch in 3rd-person: vertical portal on the road, label billboarded.
+    function drawGateP(side, gy, isAbility) {
       const col = gateColor(side), flash = Math.min(1, side.hitTime / 0.12);
       const c = flash > 0 ? mixWhite(col, flash * 0.75) : col;
-      ctx.save(); ctx.translate(side.x, y);
-      ctx.globalAlpha = 0.28 + flash * 0.3; ctx.fillStyle = c; ctx.fillRect(-88, -7, 176, 14);
-      ctx.globalAlpha = 1; ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.strokeRect(-88, -7, 176, 14);
-      ctx.scale(1, -1);
-      let text = side.text; if (side.type === 'SQUAD' && !side.isBad) text = `+${Math.round(side.val)} SQUAD`;
-      ctx.font = font(15); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const tw = Math.min(170, ctx.measureText(text).width + 18);
-      ctx.fillStyle = 'rgba(2,6,23,0.85)'; ctx.beginPath(); ctx.roundRect(-tw / 2, 13, tw, 24, 12); ctx.fill();
-      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
-      ctx.fillStyle = side.isBad ? '#fecaca' : '#ffffff'; ctx.fillText(text, 0, 26, 160);
+      const foot = project(side.x, gy, 0), top = project(side.x, gy, isAbility ? 110 : 78);
+      if (!foot || !top) return;
+      const hw = (isAbility ? 78 : 70) * foot.s, thick = Math.max(3, 5 * foot.s);
+      // Portal slab
+      ctx.globalAlpha = 0.35 + flash * 0.35;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.moveTo(foot.x - hw, foot.y); ctx.lineTo(foot.x + hw, foot.y);
+      ctx.lineTo(top.x + hw * 0.92, top.y); ctx.lineTo(top.x - hw * 0.92, top.y);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = c; ctx.lineWidth = thick;
+      ctx.stroke();
+      // Inner glow frame
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = Math.max(1.5, 2 * foot.s);
+      ctx.strokeRect(foot.x - hw * 0.72, top.y + (foot.y - top.y) * 0.15, hw * 1.44, (foot.y - top.y) * 0.7);
+      // Billboard label (readable in 3rd-person)
+      let text = side.text;
+      if (side.type === 'SQUAD' && !side.isBad) text = `+${Math.round(side.val)} SQUAD`;
+      if (side.checkpoint || side.type === 'FORM') text = `⚡ ${side.val || text}`;
+      const fs = Math.max(11, Math.min(22, 16 * foot.s * 1.15));
+      ctx.font = font(fs); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const label = text, tw = Math.min(hw * 1.8, ctx.measureText(label).width + 18 * foot.s);
+      const lx = (top.x + foot.x) / 2, ly = top.y + 22 * foot.s; // sit above the arch in screen space
+      // Camera y is flipped; un-flip for readable billboard text.
+      ctx.save(); ctx.translate(lx, ly); ctx.scale(1, -1);
+      ctx.font = font(fs); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(2,6,23,0.9)';
+      ctx.beginPath(); ctx.roundRect(-tw / 2, -12 * foot.s, tw, 24 * foot.s, 10 * foot.s); ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, 2 * foot.s); ctx.stroke();
+      ctx.fillStyle = side.isBad ? '#fecaca' : '#ffffff';
+      ctx.fillText(label, 0, 0, tw - 8);
+      if (isAbility || side.checkpoint) {
+        const banner = 'ABILITY CHECKPOINT';
+        ctx.font = font(Math.max(9, 11 * foot.s));
+        const bw = ctx.measureText(banner).width + 14 * foot.s;
+        ctx.fillStyle = 'rgba(14,165,233,0.95)';
+        ctx.beginPath(); ctx.roundRect(-bw / 2, -34 * foot.s, bw, 18 * foot.s, 8 * foot.s); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(banner, 0, -25 * foot.s);
+      }
       ctx.restore();
     }
 
+    const h0boss = () => Sprites.CAST.boss.h * 0.85 * 0.8 - 12;
     function render(rawDt) {
-      // Zone atmosphere drawn on the canvas itself: blue -> industrial orange -> purple arena
       const pct = trackProgress / trackLength;
       const target = (state === 'BOSS' || pct >= 0.8) ? ZONE_COLORS.arena : pct >= 0.4 ? ZONE_COLORS.industrial : ZONE_COLORS.train;
       const k = Math.min(1, (rawDt || 0.016) * 1.5);
@@ -757,71 +1254,222 @@
       const bg = `rgb(${bgColor.map(Math.round).join(',')})`;
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-      const vg = ctx.createLinearGradient(0, 0, 0, H);
-      vg.addColorStop(0, 'rgba(2,6,23,0.55)'); vg.addColorStop(0.5, 'rgba(2,6,23,0)'); vg.addColorStop(1, 'rgba(2,6,23,0.35)');
-      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+      // Sky gradient (horizon at top)
+      const sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+      sky.addColorStop(0, 'rgba(2,6,23,0.85)'); sky.addColorStop(1, 'rgba(2,6,23,0)');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H * 0.55);
       document.body.style.backgroundColor = bg;
       $('damageOverlay').style.opacity = damageFlash > 0 ? '1' : '0';
       if (damageFlash > 0) damageFlash -= rawDt || 0.016;
 
-      const cy = H * 0.8;
       ctx.save();
       if (screenShake > 0) ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
       ctx.translate(W / 2, cy); ctx.scale(VS, VS);
       const top = -cy / VS, bottom = (H - cy) / VS;
 
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.45)'; ctx.fillRect(-ROAD_HALF, top, ROAD_HALF * 2, bottom - top);
-      ctx.fillStyle = '#38bdf8'; ctx.fillRect(-ROAD_HALF - 8, top, 8, bottom - top); ctx.fillRect(ROAD_HALF, top, 8, bottom - top);
-      const spacing = 180, offset = -(trackProgress % spacing);
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)'; ctx.lineWidth = 4;
-      for (let y = top + offset - spacing; y < bottom + spacing; y += spacing) { ctx.beginPath(); ctx.moveTo(-ROAD_HALF, y); ctx.lineTo(ROAD_HALF, y); ctx.stroke(); }
+      { // neon lane: shaded road, glowing rails, scrolling lane dashes + chevrons so the middle never reads as empty
+        const rg = ctx.createLinearGradient(-ROAD_HALF, 0, ROAD_HALF, 0);
+        rg.addColorStop(0, 'rgba(56,189,248,0.16)'); rg.addColorStop(0.18, 'rgba(15,23,42,0.62)'); rg.addColorStop(0.5, 'rgba(30,27,75,0.55)'); rg.addColorStop(0.82, 'rgba(15,23,42,0.62)'); rg.addColorStop(1, 'rgba(56,189,248,0.16)');
+        ctx.fillStyle = rg; ctx.fillRect(-ROAD_HALF, top, ROAD_HALF * 2, bottom - top);
+        const spacing = 180, offset = -(trackProgress % spacing);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)'; ctx.lineWidth = 3;
+        for (let y = top + offset - spacing; y < bottom + spacing; y += spacing) { ctx.beginPath(); ctx.moveTo(-ROAD_HALF, y); ctx.lineTo(ROAD_HALF, y); ctx.stroke(); }
+        const dash = 60, doff = -(trackProgress % (dash * 2));
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.28)';
+        for (const lx of [-ROAD_HALF / 3, ROAD_HALF / 3]) for (let y = top + doff - dash * 2; y < bottom + dash; y += dash * 2) ctx.fillRect(lx - 2, y, 4, dash * 0.6);
+        const cs = 240, coff = -(trackProgress % cs);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+        for (let y = top + coff - cs; y < bottom + cs; y += cs) { ctx.beginPath(); ctx.moveTo(-26, y + 22); ctx.lineTo(0, y); ctx.lineTo(26, y + 22); ctx.stroke(); }
+        ctx.save(); ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 18; ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-ROAD_HALF - 8, top, 8, bottom - top); ctx.fillRect(ROAD_HALF, top, 8, bottom - top); ctx.restore();
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.9)'; ctx.fillRect(-ROAD_HALF - 5, top, 2, bottom - top); ctx.fillRect(ROAD_HALF + 3, top, 2, bottom - top);
+      }
 
       ctx.save(); ctx.scale(1, -1); ctx.translate(0, -trackProgress);
 
-      if (state !== 'START' && boss && boss.active && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE')) {
-        const strike = boss.state === 'STRIKE';
-        const y0 = trackProgress - 260, len = boss.y - trackProgress + 260;
-        for (const lx of boss.lanes) {
-          ctx.fillStyle = strike ? 'rgba(239, 68, 68, 0.85)' : 'rgba(239, 68, 68, 0.28)';
-          ctx.fillRect(lx - 60, y0, 120, len);
-          if (strike) { ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillRect(lx - 14, y0, 28, len); }
-          else { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.strokeRect(lx - 60, y0, 120, len); ctx.setLineDash([]); }
+      if (state !== 'START' && boss && boss.active && boss.kind === 'sweeper') {
+        if (boss.state === 'WINDUP') { // dust lane telegraph toward where the squad was
+          ctx.strokeStyle = 'rgba(231,216,191,0.85)'; ctx.lineWidth = 4; ctx.setLineDash([12, 10]);
+          ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 120); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (boss.state === 'LUNGE' || boss.state === 'SWEEP') { // broom arc
+          const sw = boss.state === 'SWEEP';
+          ctx.fillStyle = sw ? 'rgba(231,216,191,0.75)' : 'rgba(239,68,68,0.25)';
+          ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 125, 70, 0, 0, Math.PI * 2); ctx.fill();
+          if (!sw) { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); }
         }
       }
 
-      for (const g of entities.gates) { if (!g.active) continue; drawGate(g.left, g.y); drawGate(g.right, g.y); }
+      // Collect drawables far→near for proper overlap
+      const drawList = [];
+      const push = (dy, fn) => { if (dy != null) drawList.push({ dy, fn }); };
 
+      // Boss telegraphs (world-space projected)
+      if (state !== 'START' && boss && boss.active) {
+        push(boss.y - trackProgress + CAM.back, () => {
+          if (boss.kind === 'sweeper' && boss.state === 'WINDUP') {
+            const a = project(boss.x, boss.y - 40, 40), b = project(boss.targetX, trackProgress + 40, 0);
+            if (a && b) { ctx.strokeStyle = 'rgba(231,216,191,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]); }
+          } else if ((boss.kind === 'grump' || boss.kind === 'espresso') && (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') && boss.lanes) {
+            const strike = boss.state === 'STRIKE';
+            for (const lx of boss.lanes) {
+              const a = project(lx - 55, trackProgress + 20, 0), b = project(lx + 55, trackProgress + 20, 0);
+              const c = project(lx - 40, boss.y, 0), d = project(lx + 40, boss.y, 0);
+              if (!a || !b || !c || !d) continue;
+              ctx.fillStyle = boss.kind === 'espresso'
+                ? (strike ? 'rgba(120,53,15,0.75)' : 'rgba(180,83,9,0.28)')
+                : (strike ? 'rgba(239,68,68,0.75)' : 'rgba(239,68,68,0.25)');
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+              if (!strike) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.stroke(); ctx.setLineDash([]); }
+            }
+          } else if (boss.kind === 'yeti' && boss.state === 'CAST' && boss.lanes) {
+            for (const lx of boss.lanes) {
+              const a = project(lx - 40, trackProgress + 20, 0), b = project(lx + 40, trackProgress + 20, 0);
+              const c = project(lx - 24, boss.y, 0), d = project(lx + 24, boss.y, 0);
+              if (!a || !b || !c || !d) continue;
+              ctx.fillStyle = boss.frame >= 7 ? 'rgba(56,189,248,0.7)' : 'rgba(56,189,248,0.25)';
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+            }
+          } else if (boss.kind === 'yeti' && boss.state === 'OVERHEAD' && boss.frame < 8) {
+            const p = project(boss.targetX, trackProgress + 10, 0);
+            if (p) { ctx.fillStyle = 'rgba(148,163,184,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 90 * p.s, 28 * p.s, 0, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = 'rgba(226,232,240,0.95)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]); }
+          } else if (boss.kind === 'argento' && boss.state === 'CAST' && boss.lanes) {
+            const strike = boss.frame >= 7;
+            for (const lx of boss.lanes) {
+              const a = project(lx - AxeBoss.LANE_R, trackProgress + 18, 0), b2 = project(lx + AxeBoss.LANE_R, trackProgress + 18, 0);
+              const c = project(lx - AxeBoss.LANE_R * 0.55, boss.y, 0), d = project(lx + AxeBoss.LANE_R * 0.55, boss.y, 0);
+              if (!a || !b2 || !c || !d) continue;
+              ctx.fillStyle = strike ? 'rgba(186,230,253,0.8)' : 'rgba(125,211,252,0.42)';
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
+              if (!strike) { ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.lineWidth = Math.max(2, 3 * a.s); ctx.setLineDash([8, 6]); ctx.stroke(); ctx.setLineDash([]); }
+            }
+          } else if (boss.kind === 'argento' && (boss.state === 'OVERHEAD' || boss.state === 'LEAP') && boss.frame < 7) {
+            const p = project(boss.targetX, trackProgress + 12, 0);
+            if (p) {
+              const grow = 0.55 + Math.min(1, boss.frame / 6) * 0.45;
+              ctx.fillStyle = boss.state === 'LEAP' ? 'rgba(186,230,253,0.38)' : 'rgba(248,250,252,0.42)';
+              ctx.beginPath(); ctx.ellipse(p.x, p.y, AxeBoss.SLAM_R * grow * p.s, AxeBoss.SLAM_R * 0.36 * grow * p.s, 0, 0, Math.PI * 2); ctx.fill();
+              ctx.strokeStyle = 'rgba(255,255,255,0.96)'; ctx.lineWidth = Math.max(2.5, 3.5 * p.s); ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]);
+            }
+          } else if ((boss.kind === 'flamenco' || boss.kind === 'sweeper') && (boss.state === 'LUNGE' || boss.state === 'SWEEP')) {
+            const p = project(boss.x, trackProgress + 10, 0);
+            if (p) { ctx.fillStyle = boss.state === 'SWEEP' ? 'rgba(251,113,133,0.55)' : 'rgba(239,68,68,0.25)';
+              ctx.beginPath(); ctx.ellipse(p.x, p.y, 120 * p.s, 40 * p.s, 0, 0, Math.PI * 2); ctx.fill(); }
+          } else if (boss.kind === 'squalo' && boss.state === 'LUNGE') {
+            const a = project(Math.min(boss.x, boss.targetX) - 40, trackProgress, 0);
+            const b = project(Math.max(boss.x, boss.targetX) + 40, trackProgress, 0);
+            if (a && b) { ctx.fillStyle = 'rgba(14,116,144,0.35)'; ctx.fillRect(a.x, a.y - 20 * a.s, b.x - a.x, 40 * a.s); }
+          }
+        });
+      }
+
+      for (const g of entities.gates) {
+        if (!g.active) continue;
+        const ability = g.ability || g.left.checkpoint || g.right.checkpoint;
+        push(g.y - trackProgress + CAM.back, () => {
+          drawGateP(g.left, g.y, ability && g.left.checkpoint);
+          drawGateP(g.right, g.y, ability && g.right.checkpoint);
+          // Center stripe marker for ability checkpoints
+          if (ability) {
+            const a = project(-20, g.y, 2), b = project(20, g.y, 2);
+            if (a && b) {
+              ctx.strokeStyle = 'rgba(56,189,248,0.85)'; ctx.lineWidth = Math.max(2, 3 * a.s); ctx.setLineDash([8 * a.s, 6 * a.s]);
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
+            }
+          }
+        });
+      }
+
+      const anim = Math.floor(performance.now() / 160) & 1;
       for (const e of entities.enemies) {
         if (!e.active) continue;
-        drawShadow(ctx, e.x, e.y, 40);
-        if (e.type === 'SWARM') {
-          drawVoxel(ctx, e.x, e.y, 0, 20, 24, 20, e.hitTime > 0 ? '#ffffff' : '#64748b');
-          drawVoxel(ctx, e.x, e.y + 4, 18, 12, 6, 12, '#38bdf8');
-        } else {
-          drawVoxel(ctx, e.x, e.y, 0, 32, 28, 32, e.hitTime > 0 ? '#ffffff' : '#b45309');
-          drawVoxel(ctx, e.x, e.y, 28, 16, 16, 16, '#ea580c');
-        }
-        ctx.save(); ctx.translate(e.x, e.y); ctx.scale(1, -1);
-        ctx.fillStyle = '#000'; ctx.fillRect(-20, -40, 40, 6);
-        ctx.fillStyle = '#ef4444'; ctx.fillRect(-20, -40, 40 * Math.max(0, e.hp / e.maxHp), 6);
-        ctx.restore();
+        push(e.y - trackProgress + CAM.back, () => {
+          const key = e.type === 'TANK' ? 'tank' : (e.skin || 'swarmA'), sp = Sprites.CAST[key];
+          const sc0 = e.type === 'TANK' ? 1.15 : 1.1;
+          const p = project(e.x, e.y, 0); if (!p) return;
+          drawShadowP(ctx, p, e.type === 'TANK' ? 34 : 20);
+          const sc = sc0 * p.s * 0.95;
+          ctx.save();
+          // Sprites.draw expects y-down local with feet at (x,y); our y grows up, so flip locally
+          ctx.translate(p.x, p.y); ctx.scale(1, -1);
+          Sprites.draw(ctx, key, e.hitTime > 0 ? 'hit' : (anim ^ (e.phase > Math.PI ? 1 : 0)), 0, sp.h * sc * 0.05, sc);
+          const bw = 40 * p.s, by = -sp.h * sc - 8 * p.s;
+          ctx.fillStyle = '#000'; ctx.fillRect(-bw / 2, by, bw, 5 * p.s);
+          ctx.fillStyle = '#ef4444'; ctx.fillRect(-bw / 2, by, bw * Math.max(0, e.hp / e.maxHp), 5 * p.s);
+          ctx.restore();
+        });
       }
 
       if (boss && boss.active) {
-        const flash = boss.hitTime > 0;
-        drawShadow(ctx, boss.x, boss.y, 100);
-        drawVoxel(ctx, boss.x, boss.y, 0, 80, 60, 60, flash ? '#cbd5e1' : '#334155');
-        drawVoxel(ctx, boss.x, boss.y, 60, 50, 45, 40, flash ? '#fde68a' : '#eab308');
-        const eyeColor = (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') ? '#ef4444' : '#000000';
-        drawVoxel(ctx, boss.x - 15, boss.y + 15, 80, 10, 10, 10, eyeColor);
-        drawVoxel(ctx, boss.x + 15, boss.y + 15, 80, 10, 10, 10, eyeColor);
+        push(boss.y - trackProgress + CAM.back, () => {
+          const p = project(boss.x, boss.y, 0); if (!p) return;
+          const airShadow = boss.kind === 'argento' && boss.near > 0.5;
+          drawShadowP(ctx, p, boss.kind === 'squalo' ? 110 : airShadow ? 58 : boss.kind === 'argento' ? 100 : 95);
+          ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, -1);
+          if (boss.kind === 'yeti') {
+            const sc = 0.95 * Math.min(1.35, p.s * 1.05);
+            if (boss.hitTime > 0 && !boss.dying) { ctx.globalAlpha = 0.85; ctx.filter = 'brightness(2.2)'; }
+            if (!Sprites.Yeti.draw(ctx, boss.anim || 'attack', boss.frame | 0, 0, 8, sc)) {
+              Sprites.draw(ctx, 'yeti', 0, 0, 100, sc * 0.9);
+            }
+            ctx.filter = 'none'; ctx.globalAlpha = 1;
+          } else if (boss.kind === 'argento') {
+            const sc = 1.32 * Math.min(1.55, Math.max(p.s, 0.58) * 1.12);
+            if (boss.hitTime > 0 && !boss.dying) { ctx.globalAlpha = 0.88; ctx.filter = 'brightness(1.85)'; }
+            if (!Sprites.Argento.draw(ctx, boss.anim || 'idle', boss.frame | 0, 0, 6, sc)) {
+              Sprites.draw(ctx, 'argento', 0, 0, 110, sc * 0.9);
+            }
+            ctx.filter = 'none'; ctx.globalAlpha = 1;
+          } else {
+            const sk = boss.sprite || bossMeta(boss.kind).sprite;
+            const sp = Sprites.CAST[sk];
+            const angry = boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'WINDUP' || boss.state === 'LUNGE' || boss.state === 'SWEEP';
+            const sc = (boss.kind === 'squalo' ? 0.9 : 0.85) * Math.min(1.4, p.s * 1.05);
+            const fps = (boss.state === 'SWEEP' || boss.kind === 'flamenco') ? 90 : 420;
+            Sprites.draw(ctx, sk, boss.hitTime > 0 ? 'hit' : angry ? 2 : (Math.floor(performance.now() / fps) & 1), 0, sp.h * sc * 0.05, sc);
+          }
+          ctx.restore();
+        });
       }
 
-      ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.strokeStyle = '#38bdf8';
-      ctx.beginPath();
-      for (const b of entities.bullets) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x, b.y - 20); }
-      ctx.stroke();
+      for (const d of entities.dust) {
+        push(d.y - trackProgress + CAM.back, () => {
+          const p = project(d.x, d.y, d.r * 0.4); if (!p) return;
+          const fl = d.flavor || 'dust', r = d.r * p.s;
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(d.spin);
+          if (fl === 'shell') {
+            ctx.fillStyle = '#475569'; ctx.strokeStyle = '#1a1033'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(0, 0, r * 0.85, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.arc(r * 0.35, 0, r * 0.22, 0, Math.PI * 2); ctx.fill();
+          } else if (fl === 'espresso') {
+            ctx.fillStyle = '#78350f'; ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fef3c7'; ctx.fillRect(-r * 0.55, -r * 0.95, r * 1.1, r * 0.45);
+          } else if (fl === 'feather') {
+            ctx.fillStyle = '#fda4af'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.4, r * 0.95, 0.4, 0, Math.PI * 2); ctx.fill();
+          } else {
+            for (let k = 0; k < 6; k++) {
+              const a = k * 1.05; ctx.fillStyle = k % 2 ? '#d6c4a3' : '#e7d8bf';
+              ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4, r * 0.4, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+          ctx.restore();
+        });
+      }
 
+      for (const b of entities.bullets) {
+        push(b.y - trackProgress + CAM.back, () => {
+          const a = project(b.x, b.y, 18), c = project(b.x, b.y + 28, 22);
+          if (!a || !c) return;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = 'rgba(168,85,247,0.55)'; ctx.lineWidth = Math.max(2, 7 * a.s);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+          ctx.strokeStyle = '#f0abfc'; ctx.lineWidth = Math.max(1.5, 3 * a.s);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+        });
+      }
+
+      // Squad — closest to camera, drawn last among world objects but we sort by dy so push with small dy
       if (state !== 'START') {
         ctx.save(); ctx.translate(squad.drawX, trackProgress);
         const count = Math.max(1, Math.ceil(squad.visualCount));
@@ -831,33 +1479,46 @@
           ctx.strokeStyle = 'rgba(250,204,21,0.7)'; ctx.lineWidth = 3;
           ctx.beginPath(); ctx.ellipse(0, -10, hw + 22, (hw + 22) * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
         }
-        slots.forEach(([ox, oy], i) => {
-          const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 6;
-          drawVoxel(ctx, ox, oy, bob, 14, 18, 14, '#e2e8f0');
-          drawVoxel(ctx, ox, oy, 18 + bob, 12, 12, 12, '#38bdf8');
-        });
         ctx.save(); ctx.scale(1, -1);
-        const label = `x${Math.max(0, Math.ceil(squad.count))}`;
-        ctx.font = font(14); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const lw = Math.max(60, ctx.measureText(label).width + 22);
         let depth = 0; for (const s of slots) depth = Math.max(depth, -s[1]);
-        const py = depth + 26; // pill sits just behind the last row
-        ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.roundRect(-lw / 2, py, lw, 24, 12); ctx.fill();
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.fillText(label, 0, py + 13);
-        ctx.restore();
-        ctx.restore();
+        const TS = 1.15, tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * TS;
+        if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
+        const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
+        slots.forEach(([ox, oy], i) => {
+          const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 4;
+          Sprites.draw(ctx, tKey, flashOn ? 'hit' : (anim + i) & 1, ox, -oy + th * 0.45 - bob, TS);
+        });
       }
 
-      for (const p of entities.particles) { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
-      ctx.font = font(20); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.lineWidth = 4; ctx.strokeStyle = '#000';
-      for (const t of entities.texts) {
-        ctx.save(); ctx.translate(t.x, t.y); ctx.scale(1, -1);
-        ctx.globalAlpha = Math.min(1, t.life * 3); ctx.fillStyle = t.color;
-        ctx.strokeText(t.str, 0, 0); ctx.fillText(t.str, 0, 0);
-        ctx.restore();
+      for (const p of entities.particles) {
+        push((p.y - trackProgress) + CAM.back, () => {
+          const q = project(p.x, p.y, Math.abs(p.size)); if (!q) return;
+          ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(1.5, p.size * q.s), 0, Math.PI * 2); ctx.fill();
+        });
       }
-      ctx.restore(); ctx.restore();
+      for (const t of entities.texts) {
+        push((t.y - trackProgress) + CAM.back, () => {
+          const q = project(t.x, t.y, 40); if (!q) return;
+          ctx.save(); ctx.translate(q.x, q.y); ctx.scale(1, -1);
+          ctx.font = font(Math.max(14, 20 * q.s)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.lineWidth = Math.max(2, 4 * q.s); ctx.strokeStyle = '#000';
+          ctx.globalAlpha = Math.min(1, t.life * 3); ctx.fillStyle = t.color;
+          ctx.strokeText(t.str, 0, 0); ctx.fillText(t.str, 0, 0);
+          ctx.restore();
+        });
+      }
+
+      drawList.sort((a, b) => b.dy - a.dy); // far first
+      for (const d of drawList) d.fn();
+
+      ctx.restore();
+      if (dustBlind > 0) {
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const Wc = ctx.canvas.width, Hc = ctx.canvas.height, g = ctx.createRadialGradient(Wc / 2, Hc * 0.75, Wc * 0.15, Wc / 2, Hc * 0.6, Wc * 0.9);
+        const a = Math.min(1, dustBlind / 1.4) * 0.85;
+        g.addColorStop(0, `rgba(214,196,163,${a * 0.35})`); g.addColorStop(1, `rgba(150,128,96,${a})`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, Wc, Hc); ctx.restore();
+      }
     }
 
     // ----- End of zone / run -----
@@ -881,33 +1542,149 @@
       renderShop();
     }
     function victory() {
-      state = 'VICTORY'; recordBest();
+      state = 'VICTORY'; recordBest(); Portal.gameplayStop();
       $('endTitle').textContent = 'STAGE CLEAR!'; $('endTitle').style.color = '#38bdf8';
       $('endDesc').textContent = `Boss defeated! ✨ ${Math.round(aura)} aura to spend. ${Math.min(40, Math.round(squad.count * 0.5))} troopers carry over.`;
       $('endBest').textContent = bestText();
       $('shop').style.display = 'flex'; renderShop();
       $('nextBtn').textContent = 'NEXT ZONE'; $('nextBtn').className = 'btn';
+      renderAdOffers();
       $('bossUI').style.display = 'none'; $('endModal').style.display = 'flex';
       slowMoTimer = 0; $('slowmoOverlay').style.opacity = '0';
     }
     function gameOver() {
-      state = 'GAMEOVER'; recordBest(); const gained = endRunEssence();
+      deathState = state === 'BOSS' ? 'BOSS' : 'PLAYING';
+      state = 'GAMEOVER'; recordBest(); const gained = endRunEssence(); lastGained = gained; Portal.gameplayStop();
+      AuraBox.endRun(runPlayed()); // free Aura Box for every played run (once per run, revives don't add more)
       $('endTitle').textContent = 'CRASHED OUT!'; $('endTitle').style.color = '#ef4444';
-      $('endDesc').textContent = `Your squad was wiped out in Zone ${level}. Run aura: ✨ ${Math.round(aura)}. Essence: ◈ +${gained} (spend it in UPGRADES).`;
+      setGameOverText();
+      renderAdOffers();
       $('endBest').textContent = bestText();
       $('shop').style.display = 'none'; $('bossUI').style.display = 'none';
       slowMoTimer = 0; $('slowmoOverlay').style.opacity = '0';
-      $('nextBtn').textContent = 'NEW RUN'; $('nextBtn').className = 'btn gold';
+      $('nextBtn').textContent = 'NEW RUN'; $('nextBtn').className = 'btn gold'; AuraBox.renderEndOffer();
       $('endModal').style.display = 'flex';
     }
-    function nextLevel() {
-      if (state === 'VICTORY') { carrySquad = Math.min(40, Math.round(squad.count * 0.5)); level++; initLevel(); }
-      else if (state === 'GAMEOVER') newRun();
+    function setGameOverText() {
+      $('endDesc').textContent = `Your squad was wiped out in Zone ${level}. Run aura: ✨ ${Math.round(aura)}. Essence: ◈ +${lastGained * (runDoubled ? 2 : 1)}${runDoubled ? ' (doubled!)' : ''} (spend it in UPGRADES).`;
     }
 
+    // ----- Opt-in rewarded ads (Android only; see js/ads.js). Every offer is a button the player may ignore. -----
+    // Boss gate: optional "double your squad" right before the boss (once per zone, squadDailyCap per day).
+    // The run is frozen behind a two-button choice; FIGHT NOW is always there and is the default.
+    let squadOfferShown = false;
+    const squadBonus = () => Math.min(60, Math.max(1, Math.ceil(squad.count)));
+    function offerDoubleSquad() {
+      if (squadOfferShown || squad.count < 1 || !BRAds.canOffer(save.ads, 'squad')) return false;
+      squadOfferShown = true; state = 'GATE'; dragging = false; Portal.gameplayStop();
+      $('gateDesc').textContent = `${bossMeta(bossKind()).name} is waiting. Your squad: x${Math.ceil(squad.count)}.`;
+      const box = $('gateOffer'); box.innerHTML = '';
+      box.appendChild(adButton('squad', `DOUBLE SQUAD → x${Math.ceil(squad.count) + squadBonus()}`, () => {
+        const add = squadBonus(); squad.count += add; addFloatText(squad.x, trackProgress + 100, `SQUAD x2! +${add}`, '#4ade80');
+        enterBoss();
+      }));
+      $('gateModal').style.display = 'flex';
+      return true;
+    }
+    function enterBoss() {
+      if (state !== 'GATE') return;
+      $('gateModal').style.display = 'none'; $('gateOffer').innerHTML = '';
+      spawnBoss(); lastTime = performance.now(); Portal.gameplayStart();
+    }
+    const reviveCount = () => Math.max(12, Math.round((8 + upgrades.recruits * 4 + meta.lv.hp * 2) * 0.75));
+    const zoneBonus = () => Math.max(250, Math.round(Math.max(0, aura - zoneAuraStart) * 0.5));
+    function adButton(id, label, onTap) {
+      const b = document.createElement('button'); b.className = 'btn ad'; b.id = id; b.textContent = '▶ ' + label;
+      b.onclick = async () => {
+        document.querySelectorAll('.btn.ad').forEach(x => x.disabled = true);
+        const ok = await BRAds.show(save.ads, id === 'adChest' ? 'chest' : id); persist();
+        if (ok) { playSound('powerup'); buzz('success'); onTap(); }
+        renderAdOffers(); renderChest();
+      };
+      return b;
+    }
+    function renderAdOffers() {
+      const box = $('adOffers'); if (!box) return; box.innerHTML = '';
+      if (state === 'GAMEOVER') {
+        if (!runRevived && !runDoubled && BRAds.canOffer(save.ads, 'revive')) box.appendChild(adButton('revive', `REVIVE (+${reviveCount()} TROOPERS)`, reviveRun));
+        if (!runDoubled && lastGained > 0 && BRAds.canOffer(save.ads, 'double')) box.appendChild(adButton('double', `DOUBLE ESSENCE (+${lastGained})`, doubleEssence));
+      } else if (state === 'VICTORY') {
+        if (!zoneBonusUsed && BRAds.canOffer(save.ads, 'zone')) box.appendChild(adButton('zone', `BONUS AURA (+${zoneBonus()})`, () => {
+          zoneBonusUsed = true; aura += zoneBonus(); updateAuraUI();
+          $('endDesc').textContent = `Boss defeated! ✨ ${Math.round(aura)} aura to spend. ${Math.min(40, Math.round(squad.count * 0.5))} troopers carry over.`;
+          renderShop();
+        }));
+      }
+    }
+    function reviveRun() {
+      if (state !== 'GAMEOVER' || runRevived) return;
+      runRevived = true;
+      // undo this wipe-out's Essence; the run continues and pays out when it really ends
+      meta.essence = Math.max(0, meta.essence - lastGained); lastGained = 0; runAwarded = false; saveMeta(); renderEssence();
+      squad.count = reviveCount(); squad.visualCount = squad.count; shieldCharges = Math.max(shieldCharges, 1); lastStandUsed = false;
+      for (const e of entities.enemies) if (e.y > trackProgress - 100 && e.y < trackProgress + 700) e.active = false;
+      if (boss && boss.active) { boss.state = 'IDLE'; boss.timer = 2.5; boss.lanes = []; $('bossUI').style.display = 'flex'; }
+      addFloatText(squad.x, trackProgress + 100, 'REVIVED!', '#4ade80');
+      $('endModal').style.display = 'none'; $('adOffers').innerHTML = ''; $('boxOffer').innerHTML = '';
+      state = deathState; lastTime = performance.now(); if (actx) actx.resume(); Portal.gameplayStart();
+    }
+    function doubleEssence() {
+      if (state !== 'GAMEOVER' || runDoubled || lastGained <= 0) return;
+      runDoubled = true; meta.essence += lastGained; saveMeta(); renderEssence(); setGameOverText();
+    }
+
+    // Daily chest: free Essence once a day; one optional ad reroll per day keeps the better roll.
+    const chestRoll = () => 10 + Math.floor(Math.random() * 21) + 3 * Math.min(save.bestZone || 0, 20);
+    function openChest() {
+      const today = BRAds.dayKey(); if (save.chestDay === today) return;
+      const n = chestRoll(); save.chestDay = today; save.chestAmt = n; persist();
+      meta.essence += n; saveMeta(); renderEssence(); playSound('powerup'); buzz('success'); renderChest();
+    }
+    function rerollChest() {
+      const n = chestRoll(), gain = Math.max(0, n - save.chestAmt);
+      save.chestAmt = Math.max(save.chestAmt, n); persist();
+      if (gain > 0) { meta.essence += gain; saveMeta(); renderEssence(); }
+      $('chestBox').dataset.reroll = gain > 0 ? `Rerolled: ◈ ${n}! +${gain} more Essence` : `Rerolled: ◈ ${n}. You kept your ◈ ${save.chestAmt}`;
+    }
+    function renderChest() {
+      const box = $('chestBox'); if (!box) return; box.innerHTML = '';
+      const today = BRAds.dayKey();
+      if (save.chestDay !== today) {
+        const b = document.createElement('button'); b.className = 'btn chest'; b.id = 'chestBtn'; b.textContent = '🎁 DAILY CHEST'; b.onclick = () => { initAudio(); openChest(); };
+        box.appendChild(b); return;
+      }
+      const p = document.createElement('p'); p.textContent = box.dataset.reroll || `🎁 Today's chest: ◈ ${save.chestAmt} Essence. New chest tomorrow.`; box.appendChild(p);
+      if (BRAds.canOffer(save.ads, 'chest')) box.appendChild(adButton('adChest', 'REROLL CHEST (KEEP BEST)', rerollChest));
+    }
+    window.onAdsReady = () => { renderChest(); renderAdOffers(); $('privOptBtn').style.display = BRAds.privacyRequired() ? '' : 'none'; };
+
+    // No interstitial ads between zones or runs (rewarded only).
+    async function nextLevel() {
+      if ((state !== 'VICTORY' && state !== 'GAMEOVER')) return;
+      if (state === 'VICTORY') { carrySquad = Math.min(40, Math.round(squad.count * 0.5)); level++; initLevel(); }
+      else if (state === 'GAMEOVER') newRun();
+      else return;
+      Portal.gameplayStart();
+    }
+    window.onAdPause = () => { if (actx && actx.state === 'running') actx.suspend(); };
+    window.onAdResume = () => { if (actx) actx.resume(); };
+
+    Sprites.build();
+    Portal.loadingFinished();
     $('startBest').textContent = bestText();
     renderEssence();
     updateMuteUI();
+    $('privacyLink').href = (window.BR_CONFIG && BR_CONFIG.PRIVACY_URL) || 'privacy-policy.html';
+    if (Portal.active) document.querySelector('.legal').style.display = 'none'; // portals: no external links
+    renderChest();
+    AuraBox.init({
+      buzz, initAudio, audio: () => ({ actx, master, muted: save.muted }),
+      award: n => { meta.essence += n; saveMeta(); renderEssence(); if (state === 'GAMEOVER') setGameOverText(); },
+      ads: { can: () => BRAds.canOffer(save.ads, 'aurabox'), show: async () => { const ok = await BRAds.show(save.ads, 'aurabox'); persist(); renderAdOffers(); renderChest(); return ok; } },
+      isRunOver: () => state === 'GAMEOVER',
+      onClose: () => { renderEssence(); },
+    });
+    BRAds.init();
     if (document.fonts && document.fonts.load) document.fonts.load(font(16)).catch(() => {});
     requestAnimationFrame(loop);
   </script>

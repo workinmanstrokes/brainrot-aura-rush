@@ -1,16 +1,28 @@
 # App art generator
 
 All of the app art for **Brainrot: Tactical Aura Rush** is drawn from code here, with no stock or
-third-party images. The art matches what the game draws in `www/index.html`: white/cyan voxel troopers,
-gold "aura", cyan lane rails, a navy/purple arena, and the gold-headed Gorilla King voxel boss. Every
-character and shape is original.
+third-party images. The characters are the original "brainrot" cast in `www/js/sprites.js` (glossy toy-style hybrids drawn
+with canvas shapes, rendered once into an in-memory atlas at startup, so there are no sprite image files):
+Cilindrino Bimbetto (top-hat kid trooper), Nonno Scopazzo (broom-sweeping grease-monkey commander), Ananasso
+Spadino (pineapple knight), Lavatrino Schiumoso (angry washing-machine grunt), Lumacone Gelatoso (gelato-shell snail), Squalo Cingolone
+(shark tank) and Testone Baffolini, the Grump King (giant mustached blob-head boss). Every character and shape is original.
+The trooper evolves within a run (`Sprites.EVOLVE`: trooper → trooper2 → trooper3 → trooper4 at 0 / 1,500 / 5,000 / 12,000
+aura earned this run). `capture-evolved.mjs --out FILE` captures the Legend-stage store shot (`09-evolved.png`).
 
 ```bash
 cd tools/art
 npm install                 # playwright-core only; uses the system Google Chrome
 node generate.mjs           # icon, adaptive layers, splash screens, feature graphic
 node capture-screenshots.mjs --seed 300 --out /tmp/shots   # gameplay screenshots, 1080x1920
+node cast-lineup.mjs /tmp/brainrot-cast.png                 # cast lineup with names
+node store-art.mjs --shots /tmp/shots --out store-assets/store   # new-cast icon, feature graphic, captioned shots
 ```
+
+`node store-art.mjs --app --shots /tmp/shots --out store-assets/store` also regenerates every launcher icon (legacy
+rounded + round, adaptive foreground/background, ldpi-xxxhdpi), all splash screens (day/night, port/land), the
+`assets/` @capacitor/assets sources and `store-assets/feature-graphic.svg` from the new cast. The SVGs wrap the
+rendered PNG because the cast is drawn with canvas. `generate.mjs`/`scenes.mjs` are the old voxel art and are no
+longer used for app art (running them would put the voxel icons back).
 
 Set `CHROME_PATH` if Chrome isn't at `/usr/bin/google-chrome`. Use `node generate.mjs --preview DIR`
 to render a few samples without touching the repo.

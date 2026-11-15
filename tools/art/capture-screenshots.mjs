@@ -24,7 +24,7 @@ const www = path.join(root, 'www');
 const server = http.createServer((req, res) => {
   const f = path.join(www, decodeURIComponent(req.url.split('?')[0]).replace(/\/$/, '/index.html'));
   if (!f.startsWith(www) || !fs.existsSync(f)) { res.writeHead(404); return res.end(); }
-  res.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : 'application/octet-stream' });
+  res.writeHead(200, { 'content-type': f.endsWith('.html') ? 'text/html' : f.endsWith('.js') ? 'text/javascript' : 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 }).listen(0, '127.0.0.1');
 await new Promise(r => server.once('listening', r));
@@ -63,7 +63,7 @@ await page.evaluate(() => {
     if (state !== 'PLAYING' && state !== 'BOSS') return;
     let tx = squad.targetX;
     if (state === 'BOSS' && boss) {
-      if (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE') { const lanes = boss.lanes && boss.lanes.length ? boss.lanes : [boss.targetX]; let best = null, bd = -1; for (let x = -150; x <= 150; x += 10) { const d = Math.min(...lanes.map(l => Math.abs(l - x))); if (d >= 80 && (best === null || Math.abs(x - squad.x) < Math.abs(best - squad.x))) best = x; if (d > bd) bd = d; } tx = best !== null ? best : (boss.targetX > 0 ? -150 : 150); }
+      if (boss.state === 'TELEGRAPH' || boss.state === 'STRIKE' || boss.state === 'CAST' || boss.state === 'OVERHEAD' || boss.state === 'LEAP') { const lanes = boss.lanes && boss.lanes.length ? boss.lanes : [boss.targetX]; let best = null, bd = -1; for (let x = -150; x <= 150; x += 10) { const d = Math.min(...lanes.map(l => Math.abs(l - x))); if (d >= 80 && (best === null || Math.abs(x - squad.x) < Math.abs(best - squad.x))) best = x; if (d > bd) bd = d; } tx = best !== null ? best : (boss.targetX > 0 ? -150 : 150); }
       else tx = boss.x;
     } else {
       const g = entities.gates.find(g => g.active && g.y > trackProgress && g.y - trackProgress < 500);
@@ -86,6 +86,7 @@ while (Date.now() - t0 < maxSec * 1000 && taken.size < want) {
       state, count: squad.count, form: squad.formation, slow: slowMoTimer, texts: entities.texts.length,
       gateAhead: g ? g.y - trackProgress : null, gateFresh: g ? !g.left.hitTime && !g.right.hitTime : false,
       gateBad: g ? !!(g.left.isBad || g.right.isBad) : false,
+      gateForm: g ? (g.left.type === 'FORM' || g.right.type === 'FORM') : false,
       enemiesNear: entities.enemies.filter(e => e.active && e.y - trackProgress > 120 && e.y - trackProgress < 420).length,
       boss: boss ? { st: boss.state, t: boss.timer } : null,
     };
@@ -101,7 +102,7 @@ while (Date.now() - t0 < maxSec * 1000 && taken.size < want) {
     else if (s.enemiesNear >= 2 && s.texts >= 1 && s.count >= 8) await snap('03-blast-the-swarm');
     else if (s.form === 'WIDE' && s.count >= 25 && s.texts === 0) await snap('04-wide-formation');
     else if (s.form === 'SPEARHEAD' && s.count >= 20) await snap('05-spearhead');
-    else if (s.slow > 1.2) await snap('08-last-stand');
+    else if (s.gateForm && s.gateAhead > 200 && s.gateAhead < 360 && s.texts === 0) await snap('08-formation-gate'); // was a slow-mo 'last stand' that rarely triggers (hung the capture)
   }
   if (s.state === 'BOSS' && s.boss && s.boss.st === 'STRIKE' && s.boss.t < 0.65) await snap('06-gorilla-king-laser');
   await page.waitForTimeout(40);
