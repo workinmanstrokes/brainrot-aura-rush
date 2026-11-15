@@ -16,10 +16,10 @@
     #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; }
 
     .top-bar { position: absolute; top: max(env(safe-area-inset-top, 0px), 14px); left: 12px; right: 12px; display: flex; flex-direction: column; gap: 10px; }
-    .stats-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #fff; font-size: 14px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+    .stats-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #fff; font-size: 17px; letter-spacing: .5px; text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
     .right-group { display: flex; align-items: center; gap: 8px; }
-    .badge { background: rgba(15, 23, 42, 0.92); padding: 7px 14px; border-radius: 20px; border: 2px solid #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-    .icon-btn { pointer-events: auto; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #94a3b8; background: rgba(15,23,42,0.92); color: #fff; font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: sans-serif; }
+    .badge { background: rgba(15, 23, 42, 0.95); padding: 0 16px; min-height: 44px; border-radius: 20px; border: 2px solid #38bdf8; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .icon-btn { pointer-events: auto; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #94a3b8; background: rgba(15,23,42,0.92); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: sans-serif; }
     .icon-btn:active { transform: scale(0.92); }
 
     .progress-container { width: 100%; height: 12px; background: rgba(15,23,42,0.9); border: 2px solid #334155; border-radius: 8px; overflow: hidden; position: relative; }
@@ -645,9 +645,9 @@
       const slots = [];
       if (form === 'SPEARHEAD') {
         const rows = Math.min(5, Math.ceil(Math.sqrt(n))), m = Math.min(n, rows * rows);
-        for (let i = 0; i < m; i++) { const r = Math.floor(Math.sqrt(i)), c = i - r * r; slots.push([(c - r) * 14, -r * 20]); }
+        for (let i = 0; i < m; i++) { const r = Math.floor(Math.sqrt(i)), c = i - r * r; slots.push([(c - r) * 19, -r * 27]); }
       } else {
-        const wide = form === 'WIDE', sp = wide ? 19 : 22;
+        const wide = form === 'WIDE', sp = wide ? 26 : 30;
         const cols = wide ? Math.min(12, n) : Math.min(9, Math.max(1, Math.ceil(Math.sqrt(n))));
         const rows = Math.min(wide ? 3 : 4, Math.ceil(n / cols)), m = Math.min(n, cols * rows);
         for (let i = 0; i < m; i++) {
@@ -1253,29 +1253,40 @@
       if (damageFlash > 0) damageFlash -= rawDt || 0.016;
 
       ctx.save();
-      const shakeAmt = reducedMotion ? screenShake * 0.2 : screenShake;
-      if (shakeAmt > 0.4) ctx.translate((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt);
-      // Bottom-center origin, y UP the screen (toward horizon)
-      ctx.translate(W / 2, H * 0.92); ctx.scale(VS, -VS);
+      if (screenShake > 0) ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+      ctx.translate(W / 2, cy); ctx.scale(VS, VS);
+      const top = -cy / VS, bottom = (H - cy) / VS;
 
-      // Perspective road trapezoid
-      const nearL = project(-ROAD_HALF, trackProgress, 0), nearR = project(ROAD_HALF, trackProgress, 0);
-      const farL = project(-ROAD_HALF, trackProgress + CAM.roadFar, 0), farR = project(ROAD_HALF, trackProgress + CAM.roadFar, 0);
-      if (nearL && nearR && farL && farR) {
-        ctx.fillStyle = 'rgba(2, 6, 23, 0.55)';
-        ctx.beginPath();
-        ctx.moveTo(nearL.x, nearL.y); ctx.lineTo(nearR.x, nearR.y);
-        ctx.lineTo(farR.x, farR.y); ctx.lineTo(farL.x, farL.y); ctx.closePath(); ctx.fill();
-        // Curbs
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(nearL.x, nearL.y); ctx.lineTo(farL.x, farL.y); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(nearR.x, nearR.y); ctx.lineTo(farR.x, farR.y); ctx.stroke();
-        // Distance stripes
-        ctx.strokeStyle = 'rgba(56,189,248,0.22)'; ctx.lineWidth = 2;
-        for (let d = 40; d < CAM.roadFar; d += 160) {
-          const a = project(-ROAD_HALF + 12, trackProgress + d, 0), b = project(ROAD_HALF - 12, trackProgress + d, 0);
-          if (!a || !b) continue;
-          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      { // neon lane: shaded road, glowing rails, scrolling lane dashes + chevrons so the middle never reads as empty
+        const rg = ctx.createLinearGradient(-ROAD_HALF, 0, ROAD_HALF, 0);
+        rg.addColorStop(0, 'rgba(56,189,248,0.16)'); rg.addColorStop(0.18, 'rgba(15,23,42,0.62)'); rg.addColorStop(0.5, 'rgba(30,27,75,0.55)'); rg.addColorStop(0.82, 'rgba(15,23,42,0.62)'); rg.addColorStop(1, 'rgba(56,189,248,0.16)');
+        ctx.fillStyle = rg; ctx.fillRect(-ROAD_HALF, top, ROAD_HALF * 2, bottom - top);
+        const spacing = 180, offset = -(trackProgress % spacing);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)'; ctx.lineWidth = 3;
+        for (let y = top + offset - spacing; y < bottom + spacing; y += spacing) { ctx.beginPath(); ctx.moveTo(-ROAD_HALF, y); ctx.lineTo(ROAD_HALF, y); ctx.stroke(); }
+        const dash = 60, doff = -(trackProgress % (dash * 2));
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.28)';
+        for (const lx of [-ROAD_HALF / 3, ROAD_HALF / 3]) for (let y = top + doff - dash * 2; y < bottom + dash; y += dash * 2) ctx.fillRect(lx - 2, y, 4, dash * 0.6);
+        const cs = 240, coff = -(trackProgress % cs);
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+        for (let y = top + coff - cs; y < bottom + cs; y += cs) { ctx.beginPath(); ctx.moveTo(-26, y + 22); ctx.lineTo(0, y); ctx.lineTo(26, y + 22); ctx.stroke(); }
+        ctx.save(); ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 18; ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(-ROAD_HALF - 8, top, 8, bottom - top); ctx.fillRect(ROAD_HALF, top, 8, bottom - top); ctx.restore();
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.9)'; ctx.fillRect(-ROAD_HALF - 5, top, 2, bottom - top); ctx.fillRect(ROAD_HALF + 3, top, 2, bottom - top);
+      }
+
+      ctx.save(); ctx.scale(1, -1); ctx.translate(0, -trackProgress);
+
+      if (state !== 'START' && boss && boss.active && boss.kind === 'sweeper') {
+        if (boss.state === 'WINDUP') { // dust lane telegraph toward where the squad was
+          ctx.strokeStyle = 'rgba(231,216,191,0.85)'; ctx.lineWidth = 4; ctx.setLineDash([12, 10]);
+          ctx.beginPath(); ctx.moveTo(boss.x, boss.y - 40); ctx.lineTo(boss.targetX, trackProgress - 120); ctx.stroke(); ctx.setLineDash([]);
+        }
+        if (boss.state === 'LUNGE' || boss.state === 'SWEEP') { // broom arc
+          const sw = boss.state === 'SWEEP';
+          ctx.fillStyle = sw ? 'rgba(231,216,191,0.75)' : 'rgba(239,68,68,0.25)';
+          ctx.beginPath(); ctx.ellipse(boss.x, trackProgress + 10, 125, 70, 0, 0, Math.PI * 2); ctx.fill();
+          if (!sw) { ctx.strokeStyle = 'rgba(239,68,68,0.9)'; ctx.lineWidth = 3; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); }
         }
       }
 
@@ -1450,47 +1461,22 @@
 
       // Squad — closest to camera, drawn last among world objects but we sort by dy so push with small dy
       if (state !== 'START') {
-        push(CAM.back + 1, () => {
-          const count = Math.max(1, Math.ceil(squad.visualCount));
-          const { slots, hw } = formationLayout(count, squad.formation);
-          const base = project(squad.drawX, trackProgress, 0); if (!base) return;
-          drawShadowP(ctx, base, Math.max(40, hw + 10));
-          if (shieldCharges > 0) {
-            ctx.strokeStyle = 'rgba(250,204,21,0.75)'; ctx.lineWidth = Math.max(2, 3 * base.s);
-            ctx.beginPath(); ctx.ellipse(base.x, base.y - 8 * base.s, (hw + 22) * base.s, (hw + 22) * base.s * 0.32, 0, 0, Math.PI * 2); ctx.stroke();
-          }
-          // Cosmetic aura (scaled)
-          ctx.save(); ctx.translate(base.x, base.y); ctx.scale(base.s, base.s);
-          try { AuraBox.drawEquipped(ctx, hw, performance.now() / 1000); } catch (e) { /* ignore */ }
-          ctx.restore();
-          const tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * 0.82;
-          if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
-          const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
-          const hurtPose = squad.motion && squad.motion.hit > 0;
-          const hasCycle = troopStage > 0; // rookie art is one pose; later stages have a real two-frame run
-          // Sort slots so farther rows (negative oy in formation = behind) draw first
-          const ordered = slots.map((s, i) => ({ s, i })).sort((a, b) => a.s[1] - b.s[1]);
-          for (const { s: [ox, oy], i } of ordered) {
-            // oy is negative for back rows in formation; in world, back rows are slightly behind squad
-            const wy = trackProgress + oy * 0.85;
-            const p = project(squad.drawX + ox, wy, 0); if (!p) continue;
-            const pose = Motion.pose(squad.motion || Motion.create(), i, { hasCycle, reduced: reducedMotion });
-            const sc = 0.82 * p.s;
-            ctx.save();
-            ctx.translate(p.x, p.y + pose.bob * p.s);
-            ctx.scale(1, -1);
-            if (pose.lean) ctx.rotate(-pose.lean);
-            Sprites.draw(ctx, tKey, (flashOn || hurtPose) ? 'hit' : pose.frame, 0, th * sc * 0.05, sc);
-            ctx.restore();
-          }
-          const label = `x${Math.max(0, Math.ceil(squad.count))}`;
-          ctx.save(); ctx.translate(base.x, base.y - 26 * base.s); ctx.scale(1, -1);
-          ctx.font = font(Math.max(12, 14 * base.s)); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          const lw = Math.max(54 * base.s, ctx.measureText(label).width + 20 * base.s);
-          ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.roundRect(-lw / 2, -11 * base.s, lw, 22 * base.s, 11 * base.s); ctx.fill();
-          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2; ctx.stroke();
-          ctx.fillStyle = '#fff'; ctx.fillText(label, 0, 0);
-          ctx.restore();
+        ctx.save(); ctx.translate(squad.drawX, trackProgress);
+        const count = Math.max(1, Math.ceil(squad.visualCount));
+        const { slots, hw } = formationLayout(count, squad.formation);
+        drawShadow(ctx, 0, 0, Math.max(40, hw + 10));
+        if (shieldCharges > 0) {
+          ctx.strokeStyle = 'rgba(250,204,21,0.7)'; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.ellipse(0, -10, hw + 22, (hw + 22) * 0.4, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.save(); ctx.scale(1, -1);
+        let depth = 0; for (const s of slots) depth = Math.max(depth, -s[1]);
+        const TS = 1.15, tKey = Sprites.EVOLVE[troopStage].key, th = Sprites.CAST.trooper.h * TS;
+        if (evolveFlash > 0) evolveFlash -= rawDt || 0.016;
+        const flashOn = evolveFlash > 0 && (Math.floor(evolveFlash * 16) & 1);
+        slots.forEach(([ox, oy], i) => {
+          const bob = Math.abs(Math.sin((trackProgress * 0.15) + i)) * 4;
+          Sprites.draw(ctx, tKey, flashOn ? 'hit' : (anim + i) & 1, ox, -oy + th * 0.45 - bob, TS);
         });
       }
 

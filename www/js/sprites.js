@@ -459,13 +459,14 @@
   })();
 
   // ---------- Atlas ----------
+  const TROOP_PX = 4; // squad troopers draw at ~4 px/unit on a 3.5x phone (1.15 scale), bake them sharper
   const PX = 3; // atlas pixels per world unit (sprites are drawn at <= ~2.6 px/unit on phones)
   const frames = {};
   function build() {
     const doc = root.document; if (!doc) return;
     const pad = 4; let x = 0, y = 0, rowH = 0; const maxW = 1800, place = [];
     for (const key in CAST) {
-      const s = CAST[key], px = (key === 'boss' || key === 'sweeper' || key === 'espresso' || key === 'flamenco' || key === 'squaloBoss' || key === 'yeti' || key === 'argento') ? 2 : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
+      const s = CAST[key], px = (key === 'boss' || key === 'sweeper') ? 2 : EVOLVE.some(e => e.key === key) ? TROOP_PX : PX, fw = Math.ceil(s.w * px) + pad * 2, fh = Math.ceil(s.h * px) + pad * 2;
       const list = [...Array(s.frames).keys(), 'hit'];
       for (const fr of list) { if (x + fw > maxW) { x = 0; y += rowH; rowH = 0; } place.push({ key, fr, x, y, fw, fh, px }); x += fw; rowH = Math.max(rowH, fh); }
     }
